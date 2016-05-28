@@ -265,15 +265,16 @@ class WPSC_Coupon {
 		if ( $data = $wpdb->get_row( $sql, ARRAY_A ) ) {
 			$this->exists = true;
 			$this->data = wp_parse_args( apply_filters( 'wpsc_coupon_data', $data ), array(
-				'value'         => '',
-				'is-percentage' => '',
-				'condition'     => '',
-				'is-used'       => '',
-				'active'        => '',
-				'use-once'      => '',
-				'start'         => '0000-00-00 00:00:00',
-				'expiry'        => '0000-00-00 00:00:00',
-				'every_product' => ''
+				'value'             => '',
+				'is-percentage'     => '',
+				'condition'         => '',
+				'is-used'           => '',
+				'active'            => '',
+				'use-once'          => '',
+				'start'             => '0000-00-00 00:00:00',
+				'expiry'            => '0000-00-00 00:00:00',
+				'every_product'     => '',
+				'apply_after_taxes' => '',
 			) );
 			$this->data['value'] = (float) $this->data['value'];
 			$this->data['condition'] = unserialize( $this->data['condition'] );
@@ -663,6 +664,20 @@ class WPSC_Coupon {
 
 		return $this->get( 'every_product' ) == 1;
 
+	}
+
+	/**
+	 * Check whether this coupon should be applied after taxes have already been
+	 * calculated, (eg. $total = $subtotal + ( $taxrate * $subtotal ) - $coupon_value
+	 * instead of $total = ( $subtotal - $coupon_value ) + ($taxrate * ( $subtotal - $coupon_value ) );
+	 *
+	 * @access public
+	 * @since 4.0
+	 *        	
+	 * @return boolean True if the coupon should be applied after taxes have been calculated.
+	 */
+	public function apply_after_taxes() {
+		return $this->get( 'apply_after_taxes' ) == 1;
 	}
 
 	/**
