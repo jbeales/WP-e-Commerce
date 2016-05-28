@@ -97,8 +97,10 @@ class wpec_taxes_controller {
 					else
 						$coupon_tax = $this->wpec_taxes_calculate_tax($wpsc_cart->coupons_amount, $tax_rate['rate']);
 
-					/* Only subtract if coupons apply to tax.  Likely in 4.0 */
-					/* $total_tax -= $coupon_tax; */
+					if( ! $coupons->apply_after_taxes() ) {
+						$total_tax -= $coupon_tax;
+					}
+					
 				}
 
 

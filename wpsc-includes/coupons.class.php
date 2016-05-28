@@ -550,6 +550,17 @@ class wpsc_coupons {
 	}
 
 	/**
+	 * Check whether this coupon should only be applied after taxes have already 
+	 * been added to the purchase.
+	 * 
+	 * Check whether to apply this coupon after taxes have already been calculated.
+	 * @return boolean True if the coupon should be applied after taxes have been calculated.
+	 */
+	public function apply_after_taxes() {
+		return $this->has_coupon() ? $this->coupon->apply_after_taxes() : false;
+	}
+
+	/**
 	 * Check whether this coupon is a "percentage" coupon
 	 *
 	 * @since  3.8.9
