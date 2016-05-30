@@ -274,7 +274,7 @@ class WPSC_Coupon {
 				'start'             => '0000-00-00 00:00:00',
 				'expiry'            => '0000-00-00 00:00:00',
 				'every_product'     => '',
-				'apply_after_taxes' => '',
+				'after_taxes'       => '',
 			) );
 			$this->data['value'] = (float) $this->data['value'];
 			$this->data['condition'] = unserialize( $this->data['condition'] );
@@ -676,8 +676,8 @@ class WPSC_Coupon {
 	 *        	
 	 * @return boolean True if the coupon should be applied after taxes have been calculated.
 	 */
-	public function apply_after_taxes() {
-		return $this->get( 'apply_after_taxes' ) == 1;
+	public function after_taxes() {
+		return $this->get( 'after_taxes' ) == 1;
 	}
 
 	/**

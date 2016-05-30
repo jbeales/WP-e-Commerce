@@ -80,27 +80,29 @@ class wpec_taxes_controller {
 
 				$free_shipping = false;
 				$coupon_num = wpsc_get_customer_meta( 'coupon' );
+				$apply_coupons_after_taxes = false;
 				if ( $coupon_num ) {
 					$coupons = new wpsc_coupons( $coupon_num );
 					$free_shipping = $coupons->is_free_shipping();
+					$apply_coupons_after_taxes = $coupons->after_taxes();
 				}
 
-				// minus coupon tax if we are using coupons, but make sure the coupon is not a free shipping coupon
+				// minus coupon tax if we are using coupons, and the coupon is 
+				// not a free shipping coupon, and the coupon isn't an after-tax
+				// coupon.
 
-				/* Iterative note: In a future implementation, we'll allow for coupons to either apply to taxes, or not */
-				/* The default logic to date has been that they do, which is generally improper, and there's a logic bug here as well */
+				// @TODO: Make sure this doesn't pop up again.
 				/* @link: https://github.com/wp-e-commerce/WP-e-Commerce/issues/170 */
-				if ( $wpsc_cart->coupons_amount > 0 && ! $free_shipping ) {
+				if ( $wpsc_cart->coupons_amount > 0 && ! $free_shipping && ! $apply_coupons_after_taxes ) {
 
-					if ( $this->wpec_taxes_isincluded() )
+					if ( $this->wpec_taxes_isincluded() ) {
 						$coupon_tax = $this->wpec_taxes_calculate_tax($wpsc_cart->coupons_amount, $tax_rate['rate'], false);
-					else
-						$coupon_tax = $this->wpec_taxes_calculate_tax($wpsc_cart->coupons_amount, $tax_rate['rate']);
-
-					if( ! $coupons->apply_after_taxes() ) {
-						$total_tax -= $coupon_tax;
 					}
-					
+					else {
+						$coupon_tax = $this->wpec_taxes_calculate_tax($wpsc_cart->coupons_amount, $tax_rate['rate']);
+					}
+						
+					$total_tax -= $coupon_tax;
 				}
 
 
