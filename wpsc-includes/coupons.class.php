@@ -556,8 +556,8 @@ class wpsc_coupons {
 	 * Check whether to apply this coupon after taxes have already been calculated.
 	 * @return boolean True if the coupon should be applied after taxes have been calculated.
 	 */
-	public function apply_after_taxes() {
-		return $this->has_coupon() ? $this->coupon->apply_after_taxes() : false;
+	public function after_taxes() {
+		return $this->has_coupon() ? $this->coupon->after_taxes() : false;
 	}
 
 	/**
