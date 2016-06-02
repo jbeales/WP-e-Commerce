@@ -87,6 +87,17 @@
 						</td>
 					</tr>
 
+					<tr>
+						<th scope="row" valign="top">
+							<?php _e( 'Apply After Taxes', 'wp-e-commerce' ); ?>
+						</th>
+						<td>
+							</span><input type='hidden' value='0' name='add_after_taxes' />
+							<input type="checkbox" value="1" name='add_after_taxes' id="add_after_taxes"/>
+							<label for="add_every-product"><?php _e( 'This coupon will be subtracted from the total after taxes are calculated and added to the total.', 'wp-e-commerce' ) ?></label>
+						</td>
+					</tr>
+
 					<tr class="form-field coupon-conditions">
 						<th scope="row" valign="top">
 							<label><strong><?php _e( 'Conditions', 'wp-e-commerce' ); ?></strong></label>
