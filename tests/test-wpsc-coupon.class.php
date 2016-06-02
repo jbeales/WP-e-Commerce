@@ -21,6 +21,8 @@ class TestWPSCCouponClass extends WP_UnitTestCase {
 	const CONDITIONS_COUPON_CODE    = 'TEST_CONDITIONS';
 	const ACTIVE_COUPON_ID          = 8;
 	const ACTIVE_COUPON_CODE        = 'TEST_ACTIVE';
+	const AFTER_TAXES_ID            = 9;
+	const AFTER_TAXES_CODE          = 'TEST_AFTER_TAXES';
 
 	function setUp() {
 		wpsc_create_or_update_tables();
@@ -47,6 +49,7 @@ class TestWPSCCouponClass extends WP_UnitTestCase {
 			'is-used'       => 0,
 			'active'        => 1,
 			'every_product' => 0,
+			'after_taxes'	=> 0,
 			'start'         => '0000-00-00',
 			'expiry'        => '0000-00-00',
 			'condition'     => serialize( array() )
@@ -61,6 +64,7 @@ class TestWPSCCouponClass extends WP_UnitTestCase {
 			'is-used'       => 0,
 			'active'        => 1,
 			'every_product' => 0,
+			'after_taxes'	=> 0,
 			'start'         => '0000-00-00',
 			'expiry'        => '0000-00-00',
 			'condition'     => serialize( array() )
@@ -75,6 +79,7 @@ class TestWPSCCouponClass extends WP_UnitTestCase {
 			'is-used'       => 0,
 			'active'        => 1,
 			'every_product' => 0,
+			'after_taxes'	=> 0,
 			'start'         => '0000-00-00',
 			'expiry'        => '0000-00-00',
 			'condition'     => serialize( array() )
@@ -89,6 +94,7 @@ class TestWPSCCouponClass extends WP_UnitTestCase {
 			'is-used'       => 0,
 			'active'        => 1,
 			'every_product' => 0,
+			'after_taxes'	=> 0,
 			'start'         => '0000-00-00',
 			'expiry'        => '0000-00-00',
 			'condition'     => serialize( array() )
@@ -103,6 +109,7 @@ class TestWPSCCouponClass extends WP_UnitTestCase {
 			'is-used'       => 0,
 			'active'        => 1,
 			'every_product' => 0,
+			'after_taxes'	=> 0,
 			'start'         => self::START_DATE,
 			'expiry'        => self::EXPIRY_DATE,
 			'condition'     => serialize( array() )
@@ -117,6 +124,7 @@ class TestWPSCCouponClass extends WP_UnitTestCase {
 			'is-used'       => 0,
 			'active'        => 0,
 			'every_product' => 0,
+			'after_taxes'	=> 0,
 			'start'         => self::START_DATE,
 			'expiry'        => self::EXPIRY_DATE,
 			'condition'     => serialize( array() )
@@ -131,6 +139,7 @@ class TestWPSCCouponClass extends WP_UnitTestCase {
 			'is-used'       => 0,
 			'active'        => 0,
 			'every_product' => 0,
+			'after_taxes'	=> 0,
 			'start'         => '0000-00-00',
 			'expiry'        => '0000-00-00',
 			'condition'     => serialize( $this->get_test_conditions() )
@@ -145,6 +154,22 @@ class TestWPSCCouponClass extends WP_UnitTestCase {
 			'is-used'       => 0,
 			'active'        => 1,
 			'every_product' => 0,
+			'after_taxes'	=> 0,
+			'start'         => '0000-00-00',
+			'expiry'        => '0000-00-00',
+			'condition'     => serialize( array() )
+		), array( '%d', '%s', '%s', '%d', '%d', '%d', '%d', '%d', '%s', '%s', '%s' ) );
+
+		$wpdb->insert( WPSC_TABLE_COUPON_CODES, array(
+			'id'            => self::ACTIVE_COUPON_ID,
+			'coupon_code'   => self::ACTIVE_COUPON_CODE,
+			'value'         => '10',
+			'is-percentage' => 0,
+			'use-once'      => 0,
+			'is-used'       => 0,
+			'active'        => 1,
+			'every_product' => 0,
+			'after_taxes'	=> 1,
 			'start'         => '0000-00-00',
 			'expiry'        => '0000-00-00',
 			'condition'     => serialize( array() )
@@ -317,6 +342,7 @@ class TestWPSCCouponClass extends WP_UnitTestCase {
 			$this->assertEquals( $coupon_data['use-once'], $coupon->get( 'use-once' ) );
 			$this->assertEquals( $coupon_data['is-used'], $coupon->get( 'is-used' ) );
 			$this->assertEquals( $coupon_data['active'], $coupon->get( 'active' ) );
+			$this->assertEquals( $coupon_data['after_taxes'], $coupon->get( 'after_taxes' ) );
 			$this->assertEquals( $coupon_data['every_product'], $coupon->get( 'every_product' ) );
 			$this->assertEquals( $coupon_data['start'], $coupon->get( 'start' ) );
 			$this->assertEquals( $coupon_data['expiry'], $coupon->get( 'expiry' ) );
