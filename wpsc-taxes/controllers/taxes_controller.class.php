@@ -61,21 +61,21 @@ class wpec_taxes_controller {
 				//start the total_tax off at 0
 				$total_tax = 0;
 
+				// start the total amount being taxed at 0;
+				$taxable_amount = 0;
+
 				foreach ( $wpsc_cart->cart_items as $cart_item ) {
 					//if the tax is inclusive calculate vat
 					if ( $this->wpec_taxes_isincluded() ) {
 						//run wpec_taxes_calculate_included_tax
 						$taxes = $this->wpec_taxes_calculate_included_tax( $cart_item );
-
-						$total_tax += $taxes['tax'];
-					}
-					else
-					{
+					} else {
 						//run wpec_taxes_calculate_excluded_tax
 						$taxes = $this->wpec_taxes_calculate_excluded_tax( $cart_item, $tax_rate );
-
-						$total_tax += $taxes['tax'];
-					}// if
+					}
+					
+					$total_tax += $taxes['tax'];
+					$taxable_amount += $taxes['taxable_amount'];
 				}// foreach
 
 				$free_shipping = false;
@@ -95,11 +95,15 @@ class wpec_taxes_controller {
 				/* @link: https://github.com/wp-e-commerce/WP-e-Commerce/issues/170 */
 				if ( $wpsc_cart->coupons_amount > 0 && ! $free_shipping && ! $apply_coupons_after_taxes ) {
 
+					// If the amount of the coupon discount is larger than the amount that we're charging taxes on, calculate the tax discount
+					// on the amount we're taxing.
+					$coupon_taxable_amount = ( $wpsc_cart->coupons_amount > $taxable_amount ) ? $taxable_amount : $wpsc_cart->coupons_amount;
+
 					if ( $this->wpec_taxes_isincluded() ) {
-						$coupon_tax = $this->wpec_taxes_calculate_tax($wpsc_cart->coupons_amount, $tax_rate['rate'], false);
+						$coupon_tax = $this->wpec_taxes_calculate_tax( $coupon_taxable_amount, $tax_rate['rate'], false);
 					}
 					else {
-						$coupon_tax = $this->wpec_taxes_calculate_tax($wpsc_cart->coupons_amount, $tax_rate['rate']);
+						$coupon_tax = $this->wpec_taxes_calculate_tax( $coupon_taxable_amount, $tax_rate['rate']);
 					}
 						
 					$total_tax -= $coupon_tax;
@@ -164,7 +168,7 @@ class wpec_taxes_controller {
 					$taxable_price = $taxable_amount * $cart_item->quantity;
 
 					// calculate tax
-					$returnable = array( 'tax' => $this->wpec_taxes_calculate_tax( $taxable_price, $tax_rate['rate'] ), 'rate' => $tax_rate['rate'] );
+					$returnable = array( 'tax' => $this->wpec_taxes_calculate_tax( $taxable_price, $tax_rate['rate'] ), 'rate' => $tax_rate['rate'], 'taxable_amount' => $taxable_price );
 				}
 		}
 
@@ -196,7 +200,7 @@ class wpec_taxes_controller {
 				//get the taxable price - unit price multiplied by qty
 				$taxable_price = $cart_item->unit_price * $cart_item->quantity;
 
-				$returnable = array( 'tax' => $this->wpec_taxes_calculate_tax( $taxable_price, $tax_rate, false ), 'rate' => $tax_rate );
+				$returnable = array( 'tax' => $this->wpec_taxes_calculate_tax( $taxable_price, $tax_rate, false ), 'rate' => $tax_rate, 'taxable_amount' => $taxable_price );
 			}
 		}
 
