@@ -28,21 +28,43 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 
 		if ( ! $child ) {
 			$this->title = __( 'PayPal Express Checkout 3.0', 'wp-e-commerce' );
+			$this->supports = array( 'refunds', 'partial-refunds' );
 			$this->gateway->set_options( array(
 				'api_username'     => $this->setting->get( 'api_username' ),
 				'api_password'     => $this->setting->get( 'api_password' ),
 				'api_signature'    => $this->setting->get( 'api_signature' ),
-				'cancel_url'       => $this->get_shopping_cart_payment_url(),
+				'cancel_url'       => wpsc_get_cart_url(),
 				'currency'         => $this->get_currency_code(),
 				'test'             => (bool) $this->setting->get( 'sandbox_mode' ),
 				'address_override' => 1,
 				'solution_type'    => 'mark',
 				'cart_logo'        => $this->setting->get( 'cart_logo' ),
 				'cart_border'      => $this->setting->get( 'cart_border' ),
+				'incontext'        => (bool) $this->setting->get( 'incontext', '1' ),
+				'shortcut'         => (bool) $this->setting->get( 'shortcut' , '1' ),
 			) );
 
 			// Express Checkout Button
-			add_action( 'wpsc_cart_item_table_form_actions_left', array( $this, 'add_ecs_button' ), 2, 2 );
+			if ( (bool) $this->setting->get( 'shortcut' ) ) {
+				add_action( 'wpsc_cart_item_table_form_actions_left', array( $this, 'add_ecs_button' ), 2, 2 );
+			}
+			// Incontext Checkout Scripts
+			if ( (bool) $this->setting->get( 'incontext' ) ) {
+				add_action( 'wp_enqueue_scripts', array( $this, 'incontext_load_scripts' ) );
+			}
+		}
+	}
+
+	public function incontext_load_scripts() {
+		if( wpsc_is_checkout() || wpsc_is_cart() ) {
+			wp_register_script( 'ec-incontext', WPSC_URL . '/wpsc-components/merchant-core-v3/gateways/ec-incontext.js', '', null, true );
+			wp_localize_script( 'ec-incontext', 'wpec_ppic', array(
+				'mid' => esc_attr( $this->setting->get( 'api_merchantid' ) ),
+				'env' => (bool) $this->setting->get( 'sandbox_mode' ) === true ? 'sandbox' : 'production',
+				)
+			);
+			wp_enqueue_script( 'ec-incontext' );
+			wp_enqueue_script( 'ppincontext', 'https://www.paypalobjects.com/api/checkout.js', array(), null, true );
 		}
 	}
 
@@ -57,13 +79,10 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 			return;
 		}
 
-		if ( 'top' == $context ) {
-			return;
-		}
-
 		if ( _wpsc_get_current_controller_name() === 'cart' ) {
 			$url = $this->get_shortcut_url();
-			echo '<a href="'. esc_url( $url ) .'"><img src="https://www.paypalobjects.com/webstatic/en_US/i/buttons/checkout-logo-large.png" alt="' . __( 'Check out with PayPal', 'wp-e-commerce' ) . '" /></a>';
+			echo '<a class="express-checkout-button" href="'. esc_url( $url ) .'" id="express-checkout-cart-button-' . $context . '"><img src="https://www.paypalobjects.com/webstatic/en_US/i/buttons/checkout-logo-large.png" alt="' . __( 'Check out with PayPal', 'wp-e-commerce' ) . '" /></a>';
+			echo '<em class="paypal-express-separator">' . __( '&mdash; or &mdash;', 'wp-e-commerce' ) . '</em>';
 		}
 	}
 
@@ -187,7 +206,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 		);
 		$url = add_query_arg( $args, $url );
 
-		return esc_url( $url );
+		return $url;
 	}
 
 	/**
@@ -255,9 +274,12 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 
 		// Common Vars
 		$common = array(
-			'cmd'        => '_express-checkout',
-			'useraction' => 'commit',
+		    'cmd'        => '_express-checkout',
 		);
+
+		if ( ! wpsc_uses_shipping() || wpsc_is_checkout() ) {
+		   $common['useraction'] = 'commit';
+		}
 
 		if ( wp_is_mobile() ) {
 			$common['cmd'] = '_express-checkout-mobile';
@@ -354,7 +376,6 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 			}
 
 			$this->purchase_log->save();
-			transaction_results( $sessionid, false );
 		}
 
 		exit;
@@ -743,7 +764,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 			<li><?php echo esc_html( $error['details'] ) ?> (<?php echo esc_html( $error['code'] ); ?>)</li>
 			<?php endforeach; ?>
 		</ul>
-			<p><a href="<?php echo esc_url( $this->get_shopping_cart_payment_url() ); ?>"><?php ( 'Click here to go back to the checkout page.') ?></a></p>
+			<p><a href="<?php echo esc_url( wpsc_get_cart_url() ); ?>"><?php ( 'Click here to go back to the checkout page.') ?></a></p>
 <?php
 		$output = apply_filters( 'wpsc_paypal_express_checkout_gateway_error_message', ob_get_clean(), $errors );
 		return $output;
@@ -758,7 +779,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 		ob_start();
 ?>
 <p><?php _e( 'Sorry, but your transaction could not be processed by PayPal for some reason. Please contact the site administrator.' , 'wp-e-commerce' ); ?></p>
-<p><a href="<?php echo esc_attr( $this->get_shopping_cart_payment_url() ); ?>"><?php _e( 'Click here to go back to the checkout page.', 'wp-e-commerce' ) ?></a></p>
+<p><a href="<?php echo esc_attr( wpsc_get_cart_url() ); ?>"><?php _e( 'Click here to go back to the checkout page.', 'wp-e-commerce' ) ?></a></p>
 <?php
 		$output = apply_filters( 'wpsc_paypal_express_checkout_generic_error_message', ob_get_clean() );
 		return $output;
@@ -805,6 +826,14 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 </tr>
 <tr>
 	<td>
+		<label for="wpsc-paypal-express-api-username"><?php _e( 'Merchant ID', 'wp-e-commerce' ); ?></label>
+	</td>
+	<td>
+		<input type="text" name="<?php echo esc_attr( $this->setting->get_field_name( 'api_merchantid' ) ); ?>" value="<?php echo esc_attr( $this->setting->get( 'api_merchantid' ) ); ?>" id="wpsc-paypal-express-api-username" />
+	</td>
+</tr>
+<tr>
+	<td>
 		<label><?php _e( 'Sandbox Mode', 'wp-e-commerce' ); ?></label>
 	</td>
 	<td>
@@ -842,6 +871,15 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	</td>
 	<td>
 		<input type="text" name="<?php echo esc_attr( $this->setting->get_field_name( 'cart_border' ) ); ?>" value="<?php echo esc_attr( $this->setting->get( 'cart_border' ) ); ?>" id="wpsc-paypal-express-cart-border" />
+	</td>
+</tr>
+<tr>
+	<td>
+		<label for="wpsc-paypal-express-cart-border"><?php _e( 'Enable In-Context Checkout', 'wp-e-commerce' ); ?></label>
+	</td>
+	<td>
+		<label><input <?php checked( $this->setting->get( 'incontext' ) ); ?> type="radio" name="<?php echo esc_attr( $this->setting->get_field_name( 'incontext' ) ); ?>" value="1" /> <?php _e( 'Yes', 'wp-e-commerce' ); ?></label>&nbsp;&nbsp;&nbsp;
+		<label><input <?php checked( (bool) $this->setting->get( 'incontext' ), false ); ?> type="radio" name="<?php echo esc_attr( $this->setting->get_field_name( 'incontext' ) ); ?>" value="0" /> <?php _e( 'No', 'wp-e-commerce' ); ?></label>
 	</td>
 </tr>
 
@@ -1026,6 +1064,74 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 			);
 
 			$log_entry = WPSC_Logging::insert_log( $log_data, $log_meta );
+		}
+	}
+
+	public function process_refund( $order_id, $amount = 0.00, $reason = '', $manual = false ) {
+
+		if ( 0.00 == $amount ) {
+			return new WP_Error( 'paypal_refund_error', __( 'Refund Error: You need to specify a refund amount.', 'wp-e-commerce' ) );
+		}
+
+		$log = new WPSC_Purchase_Log( $order_id );
+
+		if ( ! $log->get( 'transactid' ) ) {
+			return new WP_Error( 'error', __( 'Refund Failed: No transaction ID', 'wp-e-commerce' ) );
+		}
+
+		$max_refund  = $log->get( 'totalprice' ) - $log->get_total_refunded();
+
+		if ( $amount && $max_refund < $amount || 0 > $amount ) {
+			throw new Exception( __( 'Invalid refund amount', 'wp-e-commerce' ) );
+		}
+
+		if ( $manual ) {
+			$current_refund = $log->get_total_refunded();
+			$log->set( 'total_order_refunded' , $amount + $current_refund )->save();
+
+			wpsc_purchlogs_update_notes( absint( $order_id ), sprintf( __( 'Refunded %s via Manual Refund', 'wp-e-commerce' ), wpsc_currency_display( $amount ) ) );
+			return true;
+		}
+
+		// If refund is full amount is not needed
+		// add refund params
+		$options = array(
+			'transaction_id' => $log->get( 'transactid' ),
+			'invoice'        => $log->get( 'sessionid' ),
+			'note'           => $reason,
+		);
+
+		if( $amount && $amount < $log->get_remaining_refund() ) {
+			$options['refund_type'] = 'Partial';
+			$options['amount']      = $amount;
+		} else {
+			$options['refund_type'] = 'Full';
+		}
+
+		// do API call
+		$response = $this->gateway->credit( $options );
+
+		// look at ACK to see if success or failure
+		if ( $response->has_errors() ) {
+			// WE could use $response->get_errors() and return the errors in an alert message ?
+			return false;
+		}
+
+		if ( $response->is_successful() ) {
+			$params = $response->get_params();
+			if ( 'Success' == $params['ACK'] || 'SuccessWithWarning' == $params['ACK'] ) {
+
+				$this->log_error( $response );
+				// Set a log meta entry
+				$current_refund = $log->get_total_refunded();
+				$log->set( 'total_order_refunded' , $amount + $current_refund )->save();
+
+				wpsc_purchlogs_update_notes( absint( $order_id ), sprintf( __( 'Refunded %s - Refund ID: %s', 'wp-e-commerce' ), wpsc_currency_display( $params['GROSSREFUNDAMT'] ), $params['REFUNDTRANSACTIONID'] ) );
+
+				return true;
+			}
+		} else {
+			return false;
 		}
 	}
 }

@@ -9,25 +9,49 @@
  */
 
 class WPSC_Purchase_Log_Page {
+
 	private $list_table;
 	private $output;
+	private $cols  = 0;
 	public $log_id = 0;
 
+	/**
+	 * WPSC_Purchase_Log
+	 *
+	 * @var WPSC_Purchase_Log object.
+	 */
+	public $log = null;
+
+	/**
+	 * Whether the purchase log can be modified.
+	 *
+	 * @var boolean
+	 */
+	protected $can_edit = false;
+
 	public function __construct() {
-		$controller = 'default';
+		$controller        = 'default';
 		$controller_method = 'controller_default';
 
 		// If individual purchase log, setup ID and action links.
 		if ( isset( $_REQUEST['id'] ) && is_numeric( $_REQUEST['id'] ) ) {
-			$this->log_id = (int) $_REQUEST['id'];
+			$this->log_id   = (int) $_REQUEST['id'];
+			$this->log      = new WPSC_Purchase_Log( $this->log_id );
+			$this->notes    = new WPSC_Purchase_Log_Notes( $this->log );
+			$this->can_edit = $this->log->can_edit();
 		}
 
 		if ( isset( $_REQUEST['c'] ) && method_exists( $this, 'controller_' . $_REQUEST['c'] ) ) {
-			$controller = $_REQUEST['c'];
+			$controller        = $_REQUEST['c'];
 			$controller_method = 'controller_' . $controller;
 		} elseif ( isset( $_REQUEST['id'] ) && is_numeric( $_REQUEST['id'] ) ) {
-			$controller = 'item_details';
+			$controller        = 'item_details';
 			$controller_method = 'controller_item_details';
+		}
+
+		// Can only edit in the item details view.
+		if ( 'controller_item_details' !== $controller_method ) {
+			$this->can_edit = false;
 		}
 
 		$this->$controller_method();
@@ -36,12 +60,15 @@ class WPSC_Purchase_Log_Page {
 	private function needs_update() {
 		global $wpdb;
 
-		if ( get_option( '_wpsc_purchlogs_3.8_updated' ) )
+		if ( get_option( '_wpsc_purchlogs_3.8_updated' ) ) {
 			return false;
+		}
 
 		$c = $wpdb->get_var( "SELECT COUNT(*) FROM " . WPSC_TABLE_PURCHASE_LOGS . " WHERE plugin_version IN ('3.6', '3.7')" );
-		if ( $c > 0 )
+
+		if ( $c > 0 ) {
 			return true;
+		}
 
 		update_option( '_wpsc_purchlogs_3.8_updated', true );
 		return false;
@@ -105,7 +132,7 @@ class WPSC_Purchase_Log_Page {
 				 );
 				}
 				$numChanged++;
-				$numQueries ++;
+				$numQueries++;
 			}
 
 			$sql = "UPDATE `".WPSC_TABLE_CHECKOUT_FORMS."` SET `unique_name`='delivertoafriend' WHERE `name` = '2. Shipping details'";
@@ -129,111 +156,233 @@ class WPSC_Purchase_Log_Page {
 	}
 
 	public function controller_upgrade_purchase_logs_3_8() {
-		if ( $this->needs_update() )
+		if ( $this->needs_update() ) {
 			wpsc_update_purchase_logs();
+		}
 
 		add_action( 'wpsc_display_purchase_logs_page', array( $this, 'display_upgrade_purchase_logs_3_8' ) );
 	}
 
 	function purchase_logs_pagination() {
-		global $wpdb, $purchlogitem;
+
+ 		$prev_id = $this->log->get_previous_log_id();
+		$next_id = $this->log->get_next_log_id();
 		?>
-		<span class='tablenav'><span class='tablenav-pages'><span class='pagination-links'>
-			<?php
-			$href = "#";
-			$disabled = "disabled";
-			if ( $this->log_id > 1 ) {
-				$href = $this->get_purchase_log_url( ( $this->log_id - 1 ) );
-				$disabled = '';
-			}
-			
-			?>
-			<a href='<?php echo esc_url( $href ); ?>' class='prev-page <?php echo $disabled; ?>'>&lsaquo; <?php _e( 'Previous', 'wp-e-commerce' ); ?></a>
-			<?php
+		<span class='tablenav'><span class='tablenav-logs'><span class='pagination-links'>
+			<?php if ( $prev_id ) : ?>
+				<a href='<?php echo esc_url( $this->get_purchase_log_url( $prev_id ) ); ?>' class='prev-page'>&lsaquo; <?php _e( 'Previous', 'wp-e-commerce' ); ?></a>
+			<?php endif; ?>
 
-			$max_purchase_id = wpsc_max_purchase_id();
-			$href = "#";
-			$disabled = "disabled";
-			if ( $max_purchase_id > $this->log_id ) {
-				$href = $this->get_purchase_log_url( ( $this->log_id + 1 ) );
-				$disabled = '';
-			}
-			?>
-			<a href='<?php echo esc_url( $href ); ?>' class='next-page <?php echo $disabled; ?>'><?php _e( 'Next', 'wp-e-commerce' ); ?> &rsaquo;</a>
-
+			<?php if ( $next_id ) : ?>
+				<a href='<?php echo esc_url( $this->get_purchase_log_url( $next_id ) ); ?>' class='next-page'><?php _e( 'Next', 'wp-e-commerce' ); ?> &rsaquo;</a>
+			<?php endif; ?>
 		</span></span></span>
 		<?php
 	}
 
-	function purchase_logs_checkout_fields(){
+	public function purchase_logs_checkout_fields() {
 		global $purchlogitem;
 
-		if ( ! empty( $purchlogitem->additional_fields ) ) {
-		?>
-			<div class="metabox-holder">
-				<div id="custom_checkout_fields" class="postbox">
-					<h3 class='hndle'><?php esc_html_e( 'Additional Checkout Fields' , 'wp-e-commerce' ); ?></h3>
-					<div class='inside'>
-						<?php
-						foreach( (array) $purchlogitem->additional_fields as $value ) {
-							$value['value'] = maybe_unserialize ( $value['value'] );
-							if ( is_array( $value['value'] ) ) {
-								?>
-									<p><strong><?php echo $value['name']; ?> :</strong> <?php echo implode( stripslashes( $value['value'] ), ',' ); ?></p>
-								<?php
-							} else {
-								$thevalue = esc_html( stripslashes( $value['value'] ));
-								if ( empty( $thevalue ) ) {
-									$thevalue = __( '<em>blank</em>', 'wp-e-commerce' );
-								}
-								?>
-									<p><strong><?php echo $value['name']; ?> :</strong> <?php echo $thevalue; ?></p>
-								<?php
-							}
-						}
-						?>
-					</div>
-				</div>
-			</div>
-		<?php
+		foreach( (array) $purchlogitem->additional_fields as $value ) {
+			$value['value'] = maybe_unserialize( $value['value'] );
+			if ( is_array( $value['value'] ) ) {
+				?>
+					<p><strong><?php echo $value['name']; ?> :</strong> <?php echo implode( stripslashes( $value['value'] ), ',' ); ?></p>
+				<?php
+			} else {
+				$thevalue = esc_html( stripslashes( $value['value'] ));
+				if ( empty( $thevalue ) ) {
+					$thevalue = __( '<em>blank</em>', 'wp-e-commerce' );
+				}
+				?>
+					<p><strong><?php echo $value['name']; ?> :</strong> <?php echo $thevalue; ?></p>
+				<?php
+			}
 		}
 	}
 
-	public function purchase_log_custom_fields(){
-		if( wpsc_purchlogs_has_customfields() ){?>
-			<div class='metabox-holder'>
-				<div id='purchlogs_customfields' class='postbox'>
-					<h3 class='hndle'><?php esc_html_e( 'Users Custom Fields' , 'wp-e-commerce' ); ?></h3>
-					<div class='inside'>
-						<?php $messages = wpsc_purchlogs_custommessages(); ?>
-						<?php $files = wpsc_purchlogs_customfiles(); ?>
-						<?php if(count($files) > 0){ ?>
-							<h4><?php esc_html_e( 'Cart Items with Custom Files' , 'wp-e-commerce' ); ?>:</h4>
-							<?php
-							foreach($files as $file){
-								echo $file;
-							}
-						}?>
-						<?php if(count($messages) > 0){ ?>
-							<h4><?php esc_html_e( 'Cart Items with Custom Messages' , 'wp-e-commerce' ); ?>:</h4>
-							<?php
-							foreach($messages as $message){
-								echo esc_html( $message['title'] ) . ':<br />' . nl2br( esc_html( $message['message'] ) );
-							}
-						} ?>
-					</div>
-				</div>
-			</div>
-		<?php
+	public function purchase_log_custom_fields() {
+		$messages = wpsc_purchlogs_custommessages();
+		$files    = wpsc_purchlogs_customfiles();
+
+		if ( count( $files ) > 0 ) { ?>
+			<h4><?php esc_html_e( 'Cart Items with Custom Files' , 'wp-e-commerce' ); ?>:</h4>
+			<?php
+			foreach( $files as $file ) {
+				echo $file;
+			}
 		}
+		if ( count( $messages ) > 0 ) { ?>
+			<h4><?php esc_html_e( 'Cart Items with Custom Messages' , 'wp-e-commerce' ); ?>:</h4>
+			<?php
+			foreach( $messages as $message ) {
+				echo esc_html( $message['title'] ) . ':<br />' . nl2br( esc_html( $message['message'] ) );
+			}
+		}
+	}
+
+	public function items_ordered_box() {
+		?>
+		<?php do_action( 'wpsc_purchlogitem_metabox_start', $this->log_id ); ?>
+
+		<form name="wpsc_items_ordered_form" method="post">
+			<table class="widefat" cellspacing="0">
+				<thead>
+				<tr>
+					<?php
+						print_column_headers( 'wpsc_purchase_log_item_details' );
+					 ?>
+				</tr>
+				</thead>
+
+				<tbody>
+					<?php $this->purchase_log_cart_items(); ?>
+
+					<?php if ( $this->can_edit ) : ?>
+						<tr class="wpsc_purchaselog_add_product">
+							<td colspan="<?php echo $this->cols + 2; ?>">
+								<p class="wpsc-add-row">
+									<button type="button" class="wpsc-add-item-button button"><?php esc_html_e( 'Add Item', 'wp-e-commerce' ); ?></button>
+								</p>
+							</td>
+						</tr>
+					<?php endif; ?>
+
+					<tr class="wpsc_purchaselog_start_totals" id="wpsc_discount_data">
+						<td colspan="<?php echo $this->cols; ?>">
+							<?php if ( wpsc_purchlog_has_discount_data() ): ?>
+								<?php esc_html_e( 'Coupon Code', 'wp-e-commerce' ); ?>: <?php echo wpsc_display_purchlog_discount_data(); ?>
+							<?php endif; ?>
+						</td>
+						<th class='right-col'><?php esc_html_e( 'Discount', 'wp-e-commerce' ); ?> </th>
+						<td><?php echo wpsc_display_purchlog_discount(); ?></td>
+					</tr>
+
+					<?php if ( ! wpec_display_product_tax() ): ?>
+						<tr id="wpsc_total_taxes">
+							<td colspan='<?php echo $this->cols; ?>'></td>
+							<th class='right-col'><?php esc_html_e( 'Taxes', 'wp-e-commerce' ); ?> </th>
+							<td><?php echo wpsc_display_purchlog_taxes(); ?></td>
+						</tr>
+					<?php endif; ?>
+
+					<tr id="wpsc_total_shipping">
+						<td colspan='<?php echo $this->cols; ?>'></td>
+						<th class='right-col'><?php esc_html_e( 'Shipping', 'wp-e-commerce' ); ?> </th>
+						<td><?php echo wpsc_display_purchlog_shipping( false, true ); ?></td>
+					</tr>
+					<tr id="wpsc_final_total">
+						<td colspan='<?php echo $this->cols; ?>'></td>
+						<th class='right-col'><?php esc_html_e( 'Total', 'wp-e-commerce' ); ?> </th>
+						<td><span><?php echo wpsc_display_purchlog_totalprice(); ?></span> <div class="spinner"></div></td>
+					</tr>
+
+					<?php if ( wpsc_payment_gateway_supports( $this->log->get( 'gateway' ), 'refunds' ) ) : ?>
+					<tr>
+						<td colspan="<?php echo $this->cols + 2; ?>">
+							<p class="wpsc-add-row">
+								<button type="button" class="button refund-items"><?php _e( 'Refund', 'wp-e-commerce' ); ?></button>
+							</p>
+						</td>
+					</tr>
+					<tr class="wpsc-refund-ui">
+						<td colspan="<?php echo $this->cols + 2; ?>">
+							<table>
+							<tbody>
+							<tr>
+								<td class="label"><?php _e( 'Amount already refunded', 'wp-e-commerce' ); ?>:</td>
+								<td class="total"><?php echo wpsc_currency_display( $this->log->get_total_refunded() );?></td>
+							</tr>
+							<?php if ( wpsc_payment_gateway_supports( $this->log->get( 'gateway' ), 'partial-refunds' ) ) : ?>
+							<tr>
+								<td class="label"><label for="refund_amount"><?php _e( 'Refund amount', 'wp-e-commerce' ); ?>:</label></td>
+								<td class="total">
+									<input type="text" class="text" id="refund_amount" name="refund_amount" class="wpec_input_price" />
+									<div class="clear"></div>
+								</td>
+							</tr>
+							<?php endif; ?>
+							<tr>
+								<td class="label"><label for="refund_reason"><?php _e( 'Reason for refund (optional)', 'wp-e-commerce' ); ?>:</label></td>
+								<td class="total">
+									<input type="text" class="text" id="refund_reason" name="refund_reason" />
+									<div class="clear"></div>
+								</td>
+							</tr>
+							<tr>
+								<td>
+									<p>
+										<button type="button" class="button tips button-primary do-api-refund"><?php printf( __( 'Refund via %s', 'wp-e-commerce' ), wpsc_get_payment_gateway( $this->log->get( 'gateway' ) )->get_title() ); ?></button>
+										<img src="<?php echo esc_url( wpsc_get_ajax_spinner() ); ?>" class="ajax-feedback" title="" alt="" />
+										<button type="button" class="button button-secondary do-manual-refund tips"><?php _e( 'Manual Refund', 'wp-e-commerce' ); ?></button>
+										<img src="<?php echo esc_url( wpsc_get_ajax_spinner() ); ?>" class="ajax-feedback" title="" alt="" /><br class="clear" />
+									</p>
+								</td>
+							</tbody>
+						</table>
+					</td>
+					</tr>
+					<?php endif; ?>
+				</tbody>
+			</table>
+
+		</form>
+
+		<?php do_action( 'wpsc_purchlogitem_metabox_end', $this->log_id ); ?>
+
+		<?php
+	}
+
+	public function purch_notes_box() {
+		?>
+		<div class="wpsc-notes">
+			<?php $this->notes_output(); ?>
+		</div>
+		<form method="post" action="" id="note-submit-form">
+			<?php wp_nonce_field( 'wpsc_log_add_notes_nonce', 'wpsc_log_add_notes_nonce' ); ?>
+			<input type='hidden' name='purchlog_id' value='<?php echo $this->log_id; ?>' />
+			<p>
+			<?php wp_editor( '', 'purchlog_notes', array(
+				'textarea_name' => 'purchlog_notes',
+				'textarea_rows' => 3,
+				'teeny'         => true,
+				'tinymce'       => false,
+				'media_buttons' => false,
+			) ); ?>
+			</p>
+			<div class="note-submit">
+				<input class="button" type="submit" value="<?php _e( 'Add Note', 'wp-e-commerce' ); ?>" />
+				<div class="spinner"></div>
+			</div>
+		</form>
+		<?php
+	}
+
+	private function edit_contact_details_form() {
+		$args = wpsc_get_customer_settings_form_args( $this->log->form_data() );
+		$args['form_actions'][0]['class'] = 'button';
+		$args['form_actions'][0]['title'] = __( 'Update', 'wp-e-commerce' );
+		echo wpsc_get_form_output( $args );
 	}
 
 	private function purchase_log_cart_items() {
-		while( wpsc_have_purchaselog_details() ) : wpsc_the_purchaselog_item(); ?>
-		<tr>
+		while( wpsc_have_purchaselog_details() ) : wpsc_the_purchaselog_item();
+			self::purchase_log_cart_item( $this->can_edit );
+		endwhile;
+	}
+
+	public static function purchase_log_cart_item( $can_edit = false ) {
+		?>
+		<tr class="purchase-log-line-item" id="purchase-log-item-<?php echo wpsc_purchaselog_details_id(); ?>" data-id="<?php echo wpsc_purchaselog_details_id(); ?>" data-productid="<?php echo wpsc_purchaselog_product_id(); ?>">
 			<td><?php echo wpsc_purchaselog_details_name(); ?></td> <!-- NAME! -->
 			<td><?php echo wpsc_purchaselog_details_SKU(); ?></td> <!-- SKU! -->
-			<td><?php echo wpsc_purchaselog_details_quantity(); ?></td> <!-- QUANTITY! -->
+			<td>
+				<?php if ( $can_edit ) : ?>
+					<input type="number" step="1" min="0" autocomplete="off" name="wpsc_item_qty" class="wpsc_item_qty" placeholder="0" value="<?php echo wpsc_purchaselog_details_quantity(); ?>" size="4" class="quantity">
+				<?php else: ?>
+					<?php echo wpsc_purchaselog_details_quantity(); ?>
+				<?php endif; ?>
+			</td> <!-- QUANTITY! -->
 			<td>
 		 <?php
 		echo wpsc_currency_display( wpsc_purchaselog_details_price() );
@@ -246,22 +395,101 @@ class WPSC_Purchase_Log_Page {
 			<?php endif; ?>
 			<!-- <td><?php echo wpsc_currency_display( wpsc_purchaselog_details_discount() ); ?></td> --> <!-- DISCOUNT! -->
 			<td class="amount"><?php echo wpsc_currency_display( wpsc_purchaselog_details_total() ); ?></td> <!-- TOTAL! -->
+			<?php if ( $can_edit ) : ?>
+				<td class="remove">
+					<div class="wpsc-remove-row">
+						<button type="button" class="wpsc-remove-button wpsc-remove-item-button"><span class="dashicons dashicons-dismiss"></span> <?php esc_html_e( 'Remove Item', 'wp-e-commerce' ); ?></button>
+					</div>
+				</td> <!-- REMOVE! -->
+			<?php endif; ?>
 		</tr>
 		<?php
 		do_action( 'wpsc_additional_sales_item_info', wpsc_purchaselog_details_id() );
-		endwhile;
+	}
+
+	public function notes_output() {
+
+		foreach ( $this->notes as $note_id => $note_args ) : ?>
+			<?php self::note_output( $this->notes, $note_id, $note_args ); ?>
+		<?php endforeach;
+	}
+
+	public static function note_output( WPSC_Purchase_Log_Notes $notes, $note_id, array $note_args ) {
+		?>
+		<div class="wpsc-note" id="wpsc-note-<?php echo absint( $note_id ); ?>" data-id="<?php echo absint( $note_id ); ?>">
+			<p>
+				<strong class="note-date"><?php echo $notes->get_formatted_date( $note_args ); ?></strong>
+				<a href="#wpsc-note-<?php echo absint( $note_id ); ?>" class="note-number">#<?php echo ( $note_id ); ?></a>
+				<a href="<?php echo wp_nonce_url( add_query_arg( 'note', absint( $note_id ) ), 'delete-note', 'delete-note' ); ?>" class="wpsc-remove-button wpsc-remove-note-button"><span class="dashicons dashicons-dismiss"></span> <?php esc_html_e( 'Delete Note', 'wp-e-commerce' ); ?></a>
+			</p>
+			<div class="wpsc-note-content">
+				<?php echo wpautop( $note_args['content'] ); ?>
+			</div>
+		</div>
+		<?php
+	}
+
+	public static function shipping_address_output() {
+		?>
+		<strong>
+			<?php echo ( wpsc_display_purchlog_shipping_name() != ""           ) ? wpsc_display_purchlog_shipping_name() . "<br />"               : '<span class="field-blank">' . __( 'Anonymous', 'wp-e-commerce' ) . '</span>' ; ?>
+		</strong>
+		<?php echo ( wpsc_display_purchlog_shipping_address() != ""            ) ? wpsc_display_purchlog_shipping_address() . "<br />"            : '' ; ?>
+		<?php echo ( wpsc_display_purchlog_shipping_city() != ""               ) ? wpsc_display_purchlog_shipping_city() . ", "               : '' ; ?>
+		<?php echo ( wpsc_display_purchlog_shipping_state_and_postcode() != "" ) ? wpsc_display_purchlog_shipping_state_and_postcode() . "<br />" : '' ; ?>
+		<?php echo ( wpsc_display_purchlog_shipping_country() != ""            ) ? wpsc_display_purchlog_shipping_country() . "<br />"            : '<span class="field-blank">' . __( 'Country not specified', 'wp-e-commerce' ) . '</span>' ; ?>
+		<?php
+	}
+
+	public static function billing_address_output() {
+		?>
+		<strong>
+			<?php echo ( wpsc_display_purchlog_buyers_name() != ""           ) ? wpsc_display_purchlog_buyers_name() . "<br />"               : '<span class="field-blank">' . __( 'Anonymous', 'wp-e-commerce' ) . '</span>' ; ?>
+		</strong>
+		<?php echo ( wpsc_display_purchlog_buyers_address() != ""            ) ? wpsc_display_purchlog_buyers_address() . "<br />"            : '' ; ?>
+		<?php echo ( wpsc_display_purchlog_buyers_city() != ""               ) ? wpsc_display_purchlog_buyers_city() . ", "               : '' ; ?>
+		<?php echo ( wpsc_display_purchlog_buyers_state_and_postcode() != "" ) ? wpsc_display_purchlog_buyers_state_and_postcode() . "<br />" : '' ; ?>
+		<?php echo ( wpsc_display_purchlog_buyers_country() != ""            ) ? wpsc_display_purchlog_buyers_country() . "<br />"            : '<span class="field-blank">' . __( 'Country not specified', 'wp-e-commerce' ) . '</span>' ; ?>
+		<?php
+	}
+
+	public static function payment_details_output() {
+		?>
+		<strong><?php esc_html_e( 'Phone:', 'wp-e-commerce' ); ?> </strong><?php echo ( wpsc_display_purchlog_buyers_phone() != "" ) ? wpsc_display_purchlog_buyers_phone() : __( '<em class="field-blank">not provided</em>', 'wp-e-commerce' ); ?><br />
+		<strong><?php esc_html_e( 'Email:', 'wp-e-commerce' ); ?> </strong>
+			<a href="mailto:<?php echo wpsc_display_purchlog_buyers_email(); ?>?subject=<?php echo rawurlencode( sprintf( __( 'Message from %s', 'wp-e-commerce' ), site_url() ) ); ?>">
+				<?php echo ( wpsc_display_purchlog_buyers_email() != "" ) ? wpsc_display_purchlog_buyers_email() : __( '<em class="field-blank">not provided</em>', 'wp-e-commerce' ); ?>
+			</a>
+		<br />
+		<strong><?php esc_html_e( 'Payment Method:', 'wp-e-commerce' ); ?> </strong><?php echo wpsc_display_purchlog_paymentmethod(); ?><br />
+		<?php if ( wpsc_display_purchlog_display_howtheyfoundus() ) : ?>
+			<strong><?php esc_html_e( 'How User Found Us:', 'wp-e-commerce' ); ?> </strong><?php echo wpsc_display_purchlog_howtheyfoundus(); ?><br />
+		<?php endif; ?>
+		<?php
 	}
 
 	public function controller_item_details() {
-
-		if ( ! isset( $_REQUEST['id'] ) || ( isset( $_REQUEST['id'] ) && ! is_numeric( $_REQUEST['id'] ) ) ) {
+		if (
+			! isset( $_REQUEST['id'] )
+			|| ( isset( $_REQUEST['id'] ) && ! is_numeric( $_REQUEST['id'] ) )
+			|| ! $this->log->exists()
+		) {
 			wp_die( __( 'Invalid sales log ID', 'wp-e-commerce'  ) );
 		}
 
-		global $purchlogitem;
+		if ( isset( $_POST['wpsc_checkout_details'], $_POST['_wp_nonce'] ) ) {
+			self::maybe_update_contact_details_for_log( $this->log, wp_unslash( $_POST['wpsc_checkout_details'] ) );
+		}
 
-		// TODO: seriously get rid of all these badly coded purchaselogs.class.php functions in 4.0
-		$purchlogitem = new wpsc_purchaselogs_items( $this->log_id );
+		if ( isset( $_POST['wpsc_log_add_notes_nonce'], $_POST['purchlog_notes'] ) ) {
+			self::maybe_add_note_to_log( $this->log, wp_unslash( $_POST['purchlog_notes'] ) );
+		}
+
+		if ( isset( $_REQUEST['delete-note'], $_REQUEST['note'] ) ) {
+			self::maybe_delete_note_from_log( $this->log, absint( $_REQUEST['note'] ) );
+		}
+
+		$this->log->init_items();
 
 		$columns = array(
 			'title'    => __( 'Name', 'wp-e-commerce' ),
@@ -277,21 +505,141 @@ class WPSC_Purchase_Log_Page {
 
 		$columns['total'] = __( 'Item Total','wp-e-commerce' );
 
+		if ( $this->can_edit ) {
+			$columns['remove'] = '';
+
+			$this->include_te_v2_resources();
+			$this->enqueue_te_v2_resources();
+		}
+
+		add_filter( 'admin_title', array( $this, 'doc_title' ), 10, 2 );
+
 		register_column_headers( 'wpsc_purchase_log_item_details', $columns );
 
 		add_action( 'wpsc_display_purchase_logs_page', array( $this, 'display_purchase_log' ) );
-		add_action( 'wpsc_purchlogitem_metabox_start', array( $this, 'purchase_log_custom_fields' ) );
+		add_action( 'wpsc_purchlog_before_metaboxes' , array( $this, 'register_metaboxes' ) );
+	}
+
+	public function register_metaboxes() {
+		global $purchlogitem;
+
+		add_meta_box( 'wpsc_items_ordered', esc_html__( 'Items Ordered' , 'wp-e-commerce' ), array( $this, 'items_ordered_box' ), get_current_screen()->id, 'normal' );
+
+		add_meta_box( 'purchlogs_notes', esc_html__( 'Order Notes' , 'wp-e-commerce' ), array( $this, 'purch_notes_box' ), get_current_screen()->id, 'low' );
+
+		if ( wpsc_purchlogs_has_customfields() ) {
+			add_meta_box( 'purchlogs_customfields', esc_html__( 'Users Custom Fields' , 'wp-e-commerce' ), array( $this, 'purchase_log_custom_fields' ), get_current_screen()->id, 'normal' );
+		}
+
+		if ( ! empty( $purchlogitem->additional_fields ) ) {
+			add_meta_box( 'custom_checkout_fields', esc_html__( 'Additional Checkout Fields' , 'wp-e-commerce' ), array( $this, 'purchase_logs_checkout_fields' ), get_current_screen()->id, 'normal' );
+		}
+
+		do_action( 'wpsc_purchase_logs_register_metaboxes', get_current_screen(), $this );
+	}
+
+	public static function maybe_update_contact_details_for_log( WPSC_Purchase_Log $log, $details ) {
+		if ( is_array( $details ) ) {
+
+			check_admin_referer( 'wpsc-customer-settings-form', '_wp_nonce' );
+
+			return WPSC_Checkout_Form_Data::save_form(
+				$log,
+				WPSC_Checkout_Form::get()->get_fields(),
+				array_map( 'sanitize_text_field', $details ),
+				false
+			);
+		}
+	}
+
+	/**
+	 * Update Purchase Log Notes
+	 *
+	 * @param  WPSC_Purchase_Log  $log log object.
+	 */
+	public static function maybe_add_note_to_log( WPSC_Purchase_Log $log, $note ) {
+		if ( $note ) {
+			check_admin_referer( 'wpsc_log_add_notes_nonce', 'wpsc_log_add_notes_nonce' );
+
+			wpsc_purchlogs_update_notes( $log, wp_kses_post( $note ) );
+
+			wp_safe_redirect( esc_url_raw( remove_query_arg( 'wpsc_log_add_notes_nonce' ) ) );
+			exit;
+		}
+	}
+
+	public static function maybe_delete_note_from_log( WPSC_Purchase_Log $log, $note_id ) {
+		if ( is_numeric( $note_id ) ) {
+			check_admin_referer( 'delete-note', 'delete-note' );
+
+			$notes = new WPSC_Purchase_Log_Notes( $log );
+
+			$notes->remove( $note_id )->save();
+
+			wp_safe_redirect( esc_url_raw( remove_query_arg( 'delete-note', remove_query_arg( 'note' ) ) ) . '#purchlogs_notes' );
+			exit;
+		}
+	}
+
+	public function include_te_v2_resources() {
+		if ( ! defined( 'WPSC_TE_V2_CLASSES_PATH' ) ) {
+			require_once WPSC_FILE_PATH . '/wpsc-components/theme-engine-v2/core.php';
+			_wpsc_te_v2_includes();
+		}
+
+		require_once( WPSC_TE_V2_CLASSES_PATH . '/message-collection.php' );
+		require_once( WPSC_TE_V2_HELPERS_PATH . '/message-collection.php' );
+		require_once( WPSC_TE_V2_HELPERS_PATH . '/template-tags/form.php' );
+	}
+
+	public function enqueue_te_v2_resources() {
+		_wpsc_te2_register_styles();
+		wp_enqueue_style( 'wpsc-common' );
+
+		$engine     = WPSC_Template_Engine::get_instance();
+		$scripts    = $engine->get_core_scripts_data();
+		$to_enqueue = array(
+			'wpsc-select-autocomplete',
+			'wpsc-country-region',
+			'wpsc-copy-billing-info'
+		);
+
+		foreach ( $to_enqueue as $handle ) {
+			wp_register_script(
+				$handle,
+				WPSC_TE_V2_URL . '/theming/assets/' . $scripts[ $handle ]['path'],
+				$scripts[ $handle ]['dependencies'],
+				$scripts[ $handle ]['version'],
+				true
+			);
+			wpsc_enqueue_script( $handle );
+		}
+
+		wp_localize_script( 'wpsc-copy-billing-info', 'WPSC', array(
+			'is_admin' => true,
+		) );
+
+		_wpsc_action_enqueue_shipping_billing_scripts();
+
+		foreach ( $engine->get_queued_scripts() as $handle => $data ) {
+			_wpsc_enqueue_and_localize_script( $handle, $data );
+		}
+	}
+
+	public function doc_title( $admin_title, $title ) {
+		/* translators: #%d represents the sales log id. */
+		$this_title = sprintf( esc_html__( 'Sales Log #%d', 'wp-e-commerce' ), $this->log_id );
+		$admin_title = str_replace( $title, $this_title, $admin_title );
+
+		return $admin_title;
 	}
 
 	public function controller_packing_slip() {
-
 		if ( ! isset( $_REQUEST['id'] ) || ( isset( $_REQUEST['id'] ) && ! is_numeric( $_REQUEST['id'] ) ) ) {
 			wp_die( __( 'Invalid sales log ID', 'wp-e-commerce'  ) );
 		}
 
-		global $purchlogitem;
-
-		$purchlogitem = new wpsc_purchaselogs_items( $this->log_id );
+		$this->log->init_items();
 
 		$columns = array(
 			'title'    => __( 'Item Name', 'wp-e-commerce' ),
@@ -307,7 +655,7 @@ class WPSC_Purchase_Log_Page {
 
 		$columns['total'] = __( 'Item Total','wp-e-commerce' );
 
-		$cols = count( $columns ) - 2;
+		$this->cols = count( $columns ) - 2;
 
 		register_column_headers( 'wpsc_purchase_log_item_details', $columns );
 
@@ -325,7 +673,7 @@ class WPSC_Purchase_Log_Page {
 	}
 
 	public function controller_default() {
-		//Create an instance of our package class...
+		// Create an instance of our package class...
 		$this->list_table = new WPSC_Purchase_Log_List_Table();
 		$this->process_bulk_action();
 		$this->list_table->prepare_items();
@@ -333,18 +681,33 @@ class WPSC_Purchase_Log_Page {
 	}
 
 	public function display_purchase_log() {
-		if ( wpec_display_product_tax() )
-			$cols = 5;
-		else
-			$cols = 4;
+		$this->cols = 4;
+		if ( wpec_display_product_tax() ) {
+			$this->cols++;
+		}
+
+		if ( $this->can_edit ) {
+			$this->cols++;
+		}
+
 		$receipt_sent = ! empty( $_GET['sent'] );
 		$receipt_not_sent = isset( $_GET['sent'] ) && ! $_GET['sent'];
 		include( 'includes/purchase-logs-page/item-details.php' );
+
+		global $wp_scripts;
+
+		wp_enqueue_script( 'wp-backbone' );
+
+		if ( isset( $wp_scripts->registered['wp-e-commerce-purchase-logs'] ) ) {
+			// JS needed for modal
+			$wp_scripts->registered['wp-e-commerce-purchase-logs']->deps[] = 'wp-backbone';
+		}
+
+		add_action( 'admin_footer', 'find_posts_div' );
 	}
 
 	public function download_csv() {
-		$_REQUEST['rss_key'] = 'key';
-		wpsc_purchase_log_csv();
+		_wpsc_download_purchase_log_csv();
 	}
 
 	public function process_bulk_action() {
@@ -365,7 +728,6 @@ class WPSC_Purchase_Log_Page {
 
 		if ( 'download_csv' == $current_action ) {
 			$this->download_csv();
-			exit;
 		}
 
 		$sendback = remove_query_arg( array(

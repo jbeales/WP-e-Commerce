@@ -37,13 +37,33 @@ class WPSC_Payment_Gateway_Paypal_Digital_Goods extends WPSC_Payment_Gateway_Pay
             'cart_logo'		   => $this->setting->get( 'cart_logo' ),
             'cart_border'	   => $this->setting->get( 'cart_border' ),
         ) );
+    }
 
+    /**
+  	 * Run the gateway hooks
+  	 *
+  	 * @access public
+  	 * @since 4.0
+  	 *
+  	 * @return void
+  	 */
+  	public function init() {
+
+	// Disable default selection
+		add_filter(
+			'wpsc_payment_method_form_fields',
+			array( 'WPSC_Payment_Gateway_Paypal_Digital_Goods', 'filter_unselect_default' ), 100 , 1
+		);
+
+		// Load DG scripts and styles
+		add_action( 'wp_enqueue_scripts', array( 'WPSC_Payment_Gateway_Paypal_Digital_Goods', 'dg_script' ) );
+		
 		// Express Checkout for DG Button
 		add_action( 'wpsc_cart_item_table_form_actions_left', array( $this, 'add_ecs_button' ), 2, 2 );
 
-        // Filter Digital Goods option on checkout
-        add_filter( 'wpsc_payment_method_form_fields', array( &$this, 'dg_option_removal' ), 100 );
-    }
+		// Filter Digital Goods option on checkout
+		add_filter( 'wpsc_payment_method_form_fields', array( &$this, 'dg_option_removal' ), 100 );
+  	}
 
     /**
      * Toggles Digital Goods option based on whether or not shipping is being used on the given cart.
@@ -84,13 +104,13 @@ class WPSC_Payment_Gateway_Paypal_Digital_Goods extends WPSC_Payment_Gateway_Pay
 			return;
 		}
 
-        if ( 'top' == $context ) {
-            return;
-        }
+    if ( 'bottom' == $context ) {
+        return;
+    }
 
 		if ( _wpsc_get_current_controller_name() === 'cart' ) {
 			$url = $this->get_shortcut_url();
-			echo '<a id="pp-ecs-dg" href="'. esc_url ( $url ) .'"><img src="https://www.paypalobjects.com/webstatic/en_US/i/buttons/checkout-logo-large.png" alt="' . __( 'Check out with PayPal', 'wp-e-commerce' ) . '" /></a>';
+			echo '<a class="express-checkout-button" id="pp-ecs-dg" href="'. esc_url ( $url ) .'"><img src="https://www.paypalobjects.com/webstatic/en_US/i/buttons/checkout-logo-large.png" alt="' . __( 'Check out with PayPal', 'wp-e-commerce' ) . '" /></a>';
 		}
 	}
 
@@ -122,25 +142,6 @@ class WPSC_Payment_Gateway_Paypal_Digital_Goods extends WPSC_Payment_Gateway_Pay
         $url = add_query_arg( $args, $url );
 
         return $url;
-    }
-
-    /**
-     * Run the gateway hooks
-     *
-     * @access public
-     * @since 4.0
-     *
-     * @return void
-     */
-    public function init() {
-        // Disable default selection
-        add_filter(
-            'wpsc_payment_method_form_fields',
-            array( 'WPSC_Payment_Gateway_Paypal_Digital_Goods', 'filter_unselect_default' ), 100 , 1
-        );
-
-        // Load DG scripts and styles
-        add_action( 'wp_enqueue_scripts', array( 'WPSC_Payment_Gateway_Paypal_Digital_Goods', 'dg_script' ) );
     }
 
     /**

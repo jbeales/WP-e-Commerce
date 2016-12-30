@@ -5,7 +5,7 @@
  * These are the main WPSC Admin functions
  *
  * @package wp-e-commerce
- * @since 3.7
+ * @since 3.7.0
  */
 
 // admin includes
@@ -18,7 +18,9 @@ require_once( WPSC_FILE_PATH . '/wpsc-admin/includes/save-data.functions.php' );
 require_once( WPSC_FILE_PATH . '/wpsc-admin/includes/duplicate-product-class.php' );
 require_once( WPSC_FILE_PATH . '/wpsc-admin/includes/updating-functions.php' );
 require_once( WPSC_FILE_PATH . '/wpsc-admin/display-coupons.php' );
+require_once( WPSC_FILE_PATH . '/wpsc-includes/purchaselogs.functions.php' );
 require_once( WPSC_FILE_PATH . '/wpsc-includes/purchaselogs.class.php' );
+require_once( WPSC_FILE_PATH . '/wpsc-includes/purchaselogs-items.class.php' );
 require_once( WPSC_FILE_PATH . '/wpsc-includes/theming.class.php' );
 require_once( WPSC_FILE_PATH . '/wpsc-admin/ajax.php' );
 require_once( WPSC_FILE_PATH . '/wpsc-admin/init.php' );
@@ -38,7 +40,7 @@ add_filter( 'wpsc_javascript_localizations', '_wpsc_admin_localizations', 1 );
 /**
  * wpsc_query_vars_product_list sets the ordering for the edit-products page list
  *
- * @since 3.8
+ * @since 3.8.0
  * @access public
  *
  * @uses get_option()   Gets option from the DB given key
@@ -88,7 +90,7 @@ add_filter( 'posts_orderby', 'wpsc_admin_edit_posts_orderby' );
 /**
  * setting the product & variations per page screen option to between 1 and 999
  *
- * @since 3.8
+ * @since 3.8.0
  * @access public
  *
  * @uses update_user_option()   Updates user option given userid, key, value
@@ -116,7 +118,7 @@ add_filter('set-screen-option', 'wpsc_set_screen_option', 99, 3);
  * @param   string  $taxonomy  Taxonomy.
  * @param   string  $context   Context.
  *
- * @since  4.0
+ * @since  4.0.0
  *
  * @return  array              Filtered dropdown args.
  */
@@ -135,7 +137,7 @@ add_filter( 'taxonomy_parent_dropdown_args', 'wpsc_variation_parent_dropdown_arg
  * When rearranging the products for drag and drop it is easiest to arrange them when they are all on the same page...
  * @access public
  *
- * @since 3.8
+ * @since 3.8.0
  * @access public
  *
  * @uses get_option()   Gets option from the database given key
@@ -156,7 +158,7 @@ add_filter( 'edit_posts_per_page' , 'wpsc_drag_and_drop_ordering', 10, 2 );
 /**
  * Checks whether to display or hide the update wp-e-commerce link
  *
- * @since 3.8
+ * @since 3.8.0
  * @access public
  *
  * @uses get_option()   Gets option from DB given key
@@ -389,7 +391,7 @@ function wpsc_add_help_tabs() {
 /**
  * This function allows change in number of purchase logs shown on Sales Log (Screen Options).
  *
- * @since 3.9
+ * @since 3.9.0
  * @access public
  *
  * @uses add_screen_option()
@@ -416,21 +418,45 @@ function wpsc_admin_include_purchase_logs_css_and_js() {
 
 	_wpsc_enqueue_wp_e_commerce_admin();
 
-	wp_enqueue_script( 'wp-e-commerce-purchase-logs', WPSC_URL . '/wpsc-admin/js/purchase-logs.js', array( 'jquery' ), WPSC_VERSION . '.' . WPSC_MINOR_VERSION );
+	$dependencies = array( 'jquery' );
+
+	if ( isset( $_REQUEST['id'] ) && is_numeric( $_REQUEST['id'] ) ) {
+		wp_enqueue_style( 'wp-admin' );
+		$dependencies[] = 'postbox';
+	}
+
+	wp_enqueue_script( 'wp-e-commerce-purchase-logs', WPSC_URL . '/wpsc-admin/js/purchase-logs.js', $dependencies, WPSC_VERSION . '.' . WPSC_MINOR_VERSION, true );
 	wp_localize_script( 'wp-e-commerce-purchase-logs', 'WPSC_Purchase_Logs_Admin', array(
 		'nonce'                                  => wp_create_nonce( 'wpsc_purchase_logs' ),
 		'change_purchase_log_status_nonce'       => _wpsc_create_ajax_nonce( 'change_purchase_log_status' ),
 		'purchase_log_save_tracking_id_nonce'    => _wpsc_create_ajax_nonce( 'purchase_log_save_tracking_id' ),
 		'purchase_log_send_tracking_email_nonce' => _wpsc_create_ajax_nonce( 'purchase_log_send_tracking_email' ),
+		'purchase_log_refund_items_nonce'        => _wpsc_create_ajax_nonce( 'purchase_log_refund_items' ),
+		'remove_log_item_nonce'                  => _wpsc_create_ajax_nonce( 'remove_log_item' ),
+		'update_log_item_qty_nonce'              => _wpsc_create_ajax_nonce( 'update_log_item_qty' ),
+		'add_log_item_nonce'                     => _wpsc_create_ajax_nonce( 'add_log_item' ),
+		'edit_contact_details_nonce'             => _wpsc_create_ajax_nonce( 'edit_contact_details' ),
+		'add_note_nonce'                         => _wpsc_create_ajax_nonce( 'add_note' ),
+		'delete_note_nonce'                      => _wpsc_create_ajax_nonce( 'delete_note' ),
+		'search_products_nonce'                  => _wpsc_create_ajax_nonce( 'search_products' ),
 		'sending_message'                        => _x( 'sending...', 'sending tracking email for purchase log', 'wp-e-commerce' ),
 		'sent_message'                           => _x( 'Email Sent!', 'sending tracking email for purchase log', 'wp-e-commerce' ),
 		'current_view'                           => empty( $_REQUEST['status'] ) ? 'all' : $_REQUEST['status'],
 		'current_filter'                         => empty( $_REQUEST['m'] ) ? '' : $_REQUEST['m'],
 		'current_page'                           => empty( $_REQUEST['paged'] ) ? '' : $_REQUEST['paged'],
+		'log_id'                                 => isset( $_REQUEST['id'] ) ? absint( $_REQUEST['id'] ) : 0,
+		'strings'                                => array(
+			'confirm_delete_item' => esc_html__( 'Are you sure you want to remove this item?', 'wp-e-commerce' ),
+			'confirm_delete_note' => esc_html__( 'Are you sure you want to delete this note?', 'wp-e-commerce' ),
+			'confirm_refund_order' => esc_html__( 'Are you sure you want to refund this order?', 'wp-e-commerce' ),
+			'confirm_refund_order_manually' => esc_html__( 'Are you sure you want to refund this order manually? Note: this only affects your on-site records, it does not interface with any payment gateway to return funds to the customer.', 'wp-e-commerce' ),
+			'search_head' => esc_html__( 'Search for Products to Add', 'wp-e-commerce' ),
+			'cancel_btn' => esc_html__( 'Cancel', 'wp-e-commerce' ),
+		),
 	) );
 
 	// Purchase Log Action Links
-	wp_enqueue_script( 'wpsc-purchase-log-action-links', WPSC_URL . '/wpsc-admin/js/purchase-log-action-links.js', array( 'jquery' ), WPSC_VERSION . '.' . WPSC_MINOR_VERSION );
+	wp_enqueue_script( 'wpsc-purchase-log-action-links', WPSC_URL . '/wpsc-admin/js/purchase-log-action-links.js', array( 'jquery' ), WPSC_VERSION . '.' . WPSC_MINOR_VERSION, true );
 	wp_localize_script( 'wpsc-purchase-log-action-links', 'WPSC_Purchase_Log_Action_Links', array(
 		'purchase_log_action_link_nonce' => _wpsc_create_ajax_nonce( 'purchase_log_action_link' ),
 		'log_id'                         => empty( $_REQUEST['id'] ) ? '' : absint( $_REQUEST['id'] )
@@ -594,7 +620,10 @@ function wpsc_admin_include_css_and_js_refac( $pagehook ) {
 	$pages              = array( 'index.php', 'options-general.php', 'edit.php', 'post.php', 'post-new.php' );
 
 	_wpsc_enqueue_wp_e_commerce_admin();
-	wp_enqueue_script( 'wp-e-commerce-admin', WPSC_URL . '/wpsc-admin/js/admin.js', array( 'jquery', 'jquery-ui-core', 'jquery-ui-sortable' ), $version_identifier, false );
+
+	if ( ! is_customize_preview() ) {
+		wp_enqueue_script( 'wp-e-commerce-admin', WPSC_URL . '/wpsc-admin/js/admin.js', array( 'jquery', 'jquery-ui-core', 'jquery-ui-sortable' ), $version_identifier, false );
+	}
 
 	if ( 'dashboard_page_wpsc-sales-logs' == $current_screen->id ) {
 		// jQuery
@@ -1196,7 +1225,7 @@ function wpsc_print_admin_scripts() {
 /**
  * wpsc_ajax_ie_save save changes made using inline edit
  *
- * @since  3.8
+ * @since  3.8.0
  * @access public
  *
  * @uses get_post_type_object()       Gets post object for given registered post type name
@@ -1492,7 +1521,7 @@ add_filter( 'plugin_action_links_' . WPSC_PLUGIN_BASENAME, 'wpsc_support_links' 
  *
  * @param  array $args Array of removable query args.
  *
- * @since  4.0
+ * @since  4.0.0
  *
  * @return array $args Array of removable query args.
  */
@@ -1509,7 +1538,7 @@ add_filter( 'removable_query_args', 'wpsc_removable_query_args' );
  * @param  array $bulk_messages Array of bulk messages.
  * @param  int   $bulk_counts   The amount of messages affected.
  *
- * @since  4.0
+ * @since  4.0.0
  *
  * @return array                Array of bulk messages.
  */

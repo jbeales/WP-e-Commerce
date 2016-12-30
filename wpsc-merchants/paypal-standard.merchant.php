@@ -11,7 +11,7 @@
 $nzshpcrt_gateways[$num] = array(
 	'name' => __( 'PayPal Payments Standard 2.0', 'wp-e-commerce' ),
 	'api_version' => 2.0,
-	'image' => WPSC_URL . '/images/paypal.gif',
+	'image' => 'https://www.paypalobjects.com/webstatic/en_US/i/buttons/pp-acceptance-small.png',
 	'class_name' => 'wpsc_merchant_paypal_standard',
 	'has_recurring_billing' => true,
 	'wp_admin_cannot_cancel' => true,
@@ -137,15 +137,16 @@ class wpsc_merchant_paypal_standard extends wpsc_merchant {
 				'notify_url' => $notify_url,
 			);
 		}
+		
 		// Customer details
 		$paypal_vars += array(
 			'email'      => $this->cart_data['email_address'],
 			'first_name' => $this->cart_data['billing_address']['first_name'],
 			'last_name'  => $this->cart_data['billing_address']['last_name'],
-			'address1'   => $this->cart_data['billing_address']['address'],
-			'city'       => $this->cart_data['billing_address']['city'],
+			'address1'   => isset( $this->cart_data['billing_address']['address'] ) ? $this->cart_data['billing_address']['address'] : '',
+			'city'       => isset( $this->cart_data['billing_address']['city'] ) ? $this->cart_data['billing_address']['city'] : '',
 			'state'      => isset( $this->cart_data['billing_address']['state'] ) ? $this->cart_data['billing_address']['state'] : '',
-			'zip'        => $this->cart_data['billing_address']['post_code'],
+			'zip'        => isset( $this->cart_data['billing_address']['post_code'] ) ? $this->cart_data['billing_address']['post_code'] : '',
 			'country'    => isset( $this->cart_data['billing_address']['country'] ) ? $this->cart_data['billing_address']['country'] : '',
 		);
 

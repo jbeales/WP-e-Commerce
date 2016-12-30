@@ -3,7 +3,7 @@ Checkout
 ********************/
 .entry-content {
 	.wpsc-field-textfield input {
-    width: 90%;
+    	width: 100%;
 	}
 
 	#wpsc-checkout-form-shipping {
@@ -33,5 +33,8 @@ Checkout
 	}
 	.wpsc-cart-quantity-input {
 		width: 40px;
+	}
+	.wpsc-form-radio-wrapper img {
+		vertical-align: middle;
 	}
 }

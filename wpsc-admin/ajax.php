@@ -1,4 +1,67 @@
 <?php
+function _wpsc_ajax_purchase_log_refund_items() {
+	if ( isset( $_POST['order_id'] ) ) {
+
+		_wpsc_ajax_verify_nonce( 'purchase_log_refund_items' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			die( -1 );
+		}
+
+		$order_id               = absint( $_POST['order_id'] );
+		$refund_reason          = isset( $_POST['refund_reason'] ) ? sanitize_text_field( $_POST['refund_reason'] ) : '';
+		$refund_amount          = isset( $_POST['refund_amount'] ) ? sanitize_text_field( $_POST['refund_amount'] ) : false;
+		$manual                 = $_POST['api_refund'] === 'true' ? false : true;
+		$response_data          = array();
+
+		$log                    = new WPSC_Purchase_Log( $order_id );
+		$gateway_id             = $log->get( 'gateway' );
+		$gateway                = wpsc_get_payment_gateway( $gateway_id );
+
+		try {
+			// Validate that the refund can occur
+			$refund_amount  = $refund_amount ? $refund_amount : $log->get( 'totalprice' );
+
+			if ( wpsc_payment_gateway_supports( $gateway_id, 'refunds' ) ) {
+				// Send api request to process refund. Returns Refund transaction ID
+				$result = $gateway->process_refund( $order_id, $refund_amount, $refund_reason, $manual );
+
+				do_action( 'wpsc_refund_processed', $log, $result, $refund_amount, $refund_reason );
+
+				if ( is_wp_error( $result ) ) {
+					throw new Exception( $result->get_error_message() );
+				} elseif ( ! $result ) {
+					throw new Exception( __( 'Refund failed', 'wp-e-commerce' ) );
+				}
+			}
+
+			if ( $log->get_remaining_refund() > 0 ) {
+				/**
+				 * wpsc_order_partially_refunded.
+				 *
+				 * @since 4.0.0
+				 */
+				do_action( 'wpsc_order_partially_refunded', $log );
+				$response_data['status'] = 'partially_refunded';
+
+			} else {
+				/**
+				 * wpsc_order_fully_refunded.
+				 *
+				 * @since 4.0.0
+				 */
+				do_action( 'wpsc_order_fully_refunded', $log );
+				$response_data['status'] = 'fully_refunded';
+			}
+
+			wp_send_json_success( $response_data );
+
+		} catch ( Exception $e ) {
+			wp_send_json_error( array( 'error' => $e->getMessage() ) );
+		}
+	}
+	return new WP_Error( 'wpsc_ajax_invalid_purchase_log_refund_items', __( 'Refund failed.', 'wp-e-commerce' ) );
+}
 
 /**
  * Verify nonce of an AJAX request
@@ -456,6 +519,325 @@ function _wpsc_ajax_purchase_log_action_link() {
 }
 
 /**
+ * Remove purchase log item.
+ *
+ * @since   4.0
+ * @access  private
+ *
+ * @return  array|WP_Error  $return  Response args if successful, WP_Error if otherwise
+ */
+function _wpsc_ajax_remove_log_item() {
+
+	if ( isset( $_POST['item_id'], $_POST['log_id'] ) ) {
+
+		$item_id = absint( $_POST['item_id'] );
+		$log_id  = absint( $_POST['log_id'] );
+		$log     = new WPSC_Purchase_Log( $log_id );
+
+		if ( $log->remove_item( $item_id ) ) {
+			return _wpsc_init_log_items( $log );
+		}
+	}
+
+	return new WP_Error( 'wpsc_ajax_invalid_remove_log_item', __( 'Removing log item failed.', 'wp-e-commerce' ) );
+}
+
+/**
+ * Update purchase log item quantity.
+ *
+ * @since   4.0
+ * @access  private
+ *
+ * @return  array|WP_Error  $return  Response args if successful, WP_Error if otherwise
+ */
+function _wpsc_ajax_update_log_item_qty() {
+
+	if ( isset( $_POST['item_id'], $_POST['log_id'], $_POST['qty'] ) ) {
+
+		if ( empty( $_POST['qty'] ) ) {
+			return _wpsc_ajax_remove_log_item();
+		}
+
+		$item_id = absint( $_POST['item_id'] );
+		$log_id  = absint( $_POST['log_id'] );
+		$log     = new WPSC_Purchase_Log( $log_id );
+		$result  = $log->update_item( $item_id, array( 'quantity' => absint( $_POST['qty'] ) ) );
+
+		if ( 0 === $result ) {
+			return true;
+		} elseif ( false !== $result ) {
+			return _wpsc_init_log_items( $log );
+		}
+	}
+
+	return new WP_Error( 'wpsc_ajax_invalid_update_log_item_qty', __( 'Updating log item quantity failed.', 'wp-e-commerce' ) );
+}
+
+/**
+ * Add purchase log item.
+ *
+ * @since   4.0
+ * @access  private
+ *
+ * @return  array|WP_Error  $return  Response args if successful, WP_Error if otherwise
+ */
+function _wpsc_ajax_add_log_item() {
+	global $wpsc_cart;
+
+	if (
+		isset( $_POST['product_ids'], $_POST['log_id'] )
+		&& is_array( $_POST['product_ids'] )
+		&& ! empty( $_POST['product_ids'] )
+	) {
+
+		$existing = isset( $_POST['existing'] ) && is_array( $_POST['existing'] )
+			? array_map( 'absint', $_POST['existing'] )
+			: false;
+
+		$item_ids = array();
+		$log      = null;
+
+		foreach ( $_POST['product_ids'] as $product_id ) {
+			$product_id = absint( $product_id );
+			$log_id     = absint( $_POST['log_id'] );
+			$log        = new WPSC_Purchase_Log( $log_id );
+
+			// Is product is already in item list?
+			if ( $existing && in_array( $product_id, $existing, true ) ) {
+				$item = $log->get_item_from_product_id( $product_id );
+				if ( $item ) {
+					// Update item quantity...
+					$log->update_item( $item->id, array( 'quantity' => ++$item->quantity ) );
+					// And move on.
+					continue;
+				}
+			}
+
+			$item       = new wpsc_cart_item( $product_id, array(), $wpsc_cart );
+			$item_id    = $item->save_to_db( $log_id );
+			$item_ids[] = absint( $item_id );
+		}
+
+		return _wpsc_init_log_items( $log, $item_ids );
+	}
+
+	return new WP_Error( 'wpsc_ajax_invalid_add_log_item', __( 'Adding log item failed.', 'wp-e-commerce' ) );
+}
+
+function _wpsc_init_log_items( WPSC_Purchase_Log $log, $item_ids = array() ) {
+	$log->init_items();
+
+	require_once( WPSC_FILE_PATH . '/wpsc-admin/display-sales-logs.php' );
+
+	$html = '';
+	$htmls = array();
+	$htmls[] = array();
+
+	while ( wpsc_have_purchaselog_details() ) {
+		wpsc_the_purchaselog_item();
+
+		ob_start();
+		WPSC_Purchase_Log_Page::purchase_log_cart_item( $log->can_edit() );
+		$cart_item = ob_get_clean();
+
+		$htmls[ wpsc_purchaselog_details_id() ] = $cart_item;
+		if ( ! empty( $item_ids ) && in_array( absint( wpsc_purchaselog_details_id() ), $item_ids, true ) ) {
+			$html .= $cart_item;
+		}
+	}
+
+	return array(
+		'quantities'     => wp_list_pluck( $log->get_items(), 'quantity', 'id' ),
+		'html'           => $html,
+		'htmls'          => $htmls,
+		'discount_data'  => wpsc_purchlog_has_discount_data() ? esc_html__( 'Coupon Code', 'wp-e-commerce' ) . ': ' . wpsc_display_purchlog_discount_data() : '',
+		'discount'       => wpsc_display_purchlog_discount(),
+		'total_taxes'    => wpsc_display_purchlog_taxes(),
+		'total_shipping' => wpsc_display_purchlog_shipping( false, true ),
+		'final_total'    => wpsc_display_purchlog_totalprice(),
+	);
+}
+
+/**
+ * Edit log contact details.
+ *
+ * @since   4.0
+ * @access  private
+ *
+ * @return  array|WP_Error  $return  Response args if successful, WP_Error if otherwise
+ */
+function _wpsc_ajax_edit_contact_details() {
+
+	if ( isset( $_POST['log_id'], $_POST['fields'] ) && ! empty( $_POST['fields'] ) ) {
+
+		// Parse the URL query string of the fields array.
+		parse_str( $_POST['fields'], $fields );
+
+		$log_id = absint( $_POST['log_id'] );
+		$log    = new WPSC_Purchase_Log( $log_id );
+
+		if ( isset( $fields['wpsc_checkout_details'] ) && is_array( $fields['wpsc_checkout_details'] ) ) {
+			$details = wp_unslash( $fields['wpsc_checkout_details'] );
+
+			// Save the new/updated contact details.
+			WPSC_Checkout_Form_Data::save_form(
+				$log,
+				WPSC_Checkout_Form::get()->get_fields(),
+				array_map( 'sanitize_text_field', $details ),
+				false
+			);
+
+			require_once( WPSC_FILE_PATH . '/wpsc-admin/display-sales-logs.php' );
+
+			$log->init_items();
+
+			// Fetch the shipping/billing formatted output.
+
+			ob_start();
+			WPSC_Purchase_Log_Page::shipping_address_output();
+			$shipping = ob_get_clean();
+
+			ob_start();
+			WPSC_Purchase_Log_Page::billing_address_output();
+			$billing = ob_get_clean();
+
+			ob_start();
+			WPSC_Purchase_Log_Page::payment_details_output();
+			$payment = ob_get_clean();
+
+			return compact( 'shipping', 'billing', 'payment' );
+
+		}
+
+	}
+
+	return new WP_Error( 'wpsc_ajax_invalid_edit_contact_details', __( 'Failed to update contact details for log.', 'wp-e-commerce' ) );
+}
+
+/**
+ * Add a note to a log.
+ *
+ * @since   4.0
+ * @access  private
+ *
+ * @return  array|WP_Error  $return  Response args if successful, WP_Error if otherwise
+ */
+function _wpsc_ajax_add_note() {
+
+	if ( isset( $_POST['log_id'], $_POST['note'] ) && ! empty( $_POST['note'] ) ) {
+
+		$result = wpsc_purchlogs_update_notes(
+			absint( $_POST['log_id'] ),
+			wp_kses_post( wp_unslash( $_POST['note'] ) )
+		);
+
+		if ( $result instanceof WPSC_Purchase_Log_Notes ) {
+			require_once( WPSC_FILE_PATH . '/wpsc-admin/display-sales-logs.php' );
+
+			$data      = $result->get_data();
+			$keys      = array_keys( $data );
+			$note_id   = end( $keys );
+			$note_args = end( $data );
+
+			ob_start();
+			WPSC_Purchase_Log_Page::note_output( $result, $note_id, $note_args );
+			$row = ob_get_clean();
+
+			return $row;
+		}
+	}
+
+	return new WP_Error( 'wpsc_ajax_invalid_add_note', __( 'Failed adding log note.', 'wp-e-commerce' ) );
+}
+
+/**
+ * Delete a note from a log.
+ *
+ * @since   4.0
+ * @access  private
+ *
+ * @return  array|WP_Error  $return  Response args if successful, WP_Error if otherwise
+ */
+function _wpsc_ajax_delete_note() {
+
+	if ( isset( $_POST['log_id'], $_POST['note'] ) && is_numeric( $_POST['note'] ) ) {
+
+		$notes = wpsc_get_order_notes( absint( $_POST['log_id'] ) );
+		$notes->remove( absint( $_POST['note'] ) )->save();
+
+		return true;
+	}
+
+	return new WP_Error( 'wpsc_ajax_invalid_delete_note', __( 'Failed to delete log note.', 'wp-e-commerce' ) );
+}
+
+/**
+ * Search for products.
+ *
+ * @since   4.0
+ * @access  private
+ *
+ * @return  array|WP_Error  $return  Response args if successful, WP_Error if otherwise
+ */
+function _wpsc_ajax_search_products() {
+	$pt_object = get_post_type_object( 'wpsc-product' );
+
+	$s = wp_unslash( $_POST['search'] );
+	$args = array(
+		'post_type' => 'wpsc-product',
+		'post_status' => array( 'publish', 'inherit' ),
+		'posts_per_page' => 50,
+	);
+	if ( '' !== $s ) {
+		$args['s'] = $s;
+	}
+
+	$posts = get_posts( $args );
+
+	if ( ! $posts ) {
+		return new WP_Error( 'wpsc_ajax_invalid_search_products', __( 'No items found.', 'wp-e-commerce' ) );
+	}
+
+	$alt = '';
+	foreach ( $posts as $post ) {
+		$post->title = trim( $post->post_title ) ? $post->post_title : __( '(no title)' );
+		$alt = ( 'alternate' === $alt ) ? '' : 'alternate';
+
+		$post->status = $post->post_status;
+
+		switch ( $post->post_status ) {
+			case 'publish' :
+			case 'private' :
+				$post->status = __( 'Published' );
+				break;
+			case 'future' :
+				$post->status = __( 'Scheduled' );
+				break;
+			case 'pending' :
+				$post->status = __( 'Pending Review' );
+				break;
+			case 'draft' :
+				$post->status = __( 'Draft' );
+				break;
+			default :
+				$post->status = $post->post_status;
+				break;
+		}
+
+		if ( '0000-00-00 00:00:00' === $post->post_date ) {
+			$post->time = '';
+		} else {
+			/* translators: date format in table columns, see https://secure.php.net/date */
+			$post->time = mysql2date( __( 'Y/m/d' ), $post->post_date );
+		}
+
+		$post->class = $alt;
+	}
+
+	return $posts;
+}
+
+/**
  * Handle AJAX clear downloads lock purchase log action
  *
  * The _wpsc_ajax_purchase_log_action_link() function which triggers this function is nonce
@@ -507,7 +889,7 @@ add_action( 'wpsc_purchase_log_action_ajax-email_receipt', 'wpsc_purchase_log_ac
  * @uses _wpsc_delete_file()    Deletes files associated with a product
  * @uses WP_Error               WordPress error class
  *
- * @return array|WP_Error   $return     Response args if successful, WP_Error if otherwise
+ * @return WP_Error|array  $return     Response args if successful, WP_Error if otherwise
  */
 function _wpsc_ajax_delete_file() {
 	$product_id = absint( $_REQUEST['product_id'] );
@@ -535,7 +917,7 @@ function _wpsc_ajax_delete_file() {
  * @uses delete_meta()      Deletes metadata by meta id
  * @uses WP_Error           WordPress error class
  *
- * @return  array|WP_Error  $return     Response args if successful, WP_Error if otherwise
+ * @return  WP_Error|array  $return     Response args if successful, WP_Error if otherwise
  */
 function _wpsc_ajax_remove_product_meta() {
 	$meta_id = (int) $_POST['meta_id'];
@@ -558,7 +940,7 @@ function _wpsc_ajax_remove_product_meta() {
  * @uses WPSC_Purchase_Log_List_Table::views()
  * @uses WPSC_Purchase_Log_List_Table::display_tablenav()   @todo docs
  *
- * @return array|WP_Error   $return     Response args if successful, WP_Error if otherwise.
+ * @return WP_Error|array   $return     Response args if successful, WP_Error if otherwise.
  */
 function _wpsc_ajax_change_purchase_log_status() {
 	$result = wpsc_purchlog_edit_status( $_POST['id'], $_POST['new_status'] );
@@ -606,7 +988,7 @@ function _wpsc_ajax_change_purchase_log_status() {
  * @uses wp_update_post()   Updates post based on passed $args. Needs a post_id
  * @uses WP_Error           WordPress Error class
  *
- * @return array|WP_Error Response args if successful, WP_Error if otherwise
+ * @return WP_Error|array Response args if successful, WP_Error if otherwise
  */
 function _wpsc_ajax_save_product_order() {
 

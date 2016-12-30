@@ -76,7 +76,7 @@ abstract class WPSC_Purchase_Log_Notification {
 		$has_additional_details = false;
 		$additional_details     = array();
 
-		foreach ( $this->purchase_log->get_cart_contents() as $item ) {
+		foreach ( $this->purchase_log->get_items() as $item ) {
 			$cart_item_array = array(
 				'purchase_id'  => $log_id,
 				'cart_item'    => (array) $item,
@@ -124,7 +124,7 @@ abstract class WPSC_Purchase_Log_Notification {
 		$table_args = $this->get_table_args();
 		$output = wpsc_get_plaintext_table( $table_args['headings'], $table_args['rows'] );
 
-		foreach ( $this->purchase_log->get_cart_contents() as $cart_item ) {
+		foreach ( $this->purchase_log->get_items() as $cart_item ) {
 			if ( empty( $cart_item->custom_message ) )
 				continue;
 
@@ -156,7 +156,7 @@ abstract class WPSC_Purchase_Log_Notification {
 
 		$output = wpsc_get_purchase_log_html_table( $table_args['headings'], $table_args['rows'] );
 
-		foreach ( $this->purchase_log->get_cart_contents() as $cart_item ) {
+		foreach ( $this->purchase_log->get_items() as $cart_item ) {
 			if ( empty( $cart_item->custom_message ) )
 				continue;
 
@@ -263,9 +263,11 @@ abstract class WPSC_Purchase_Log_Notification {
 		$from_email = apply_filters( 'wpsc_purchase_log_notification_from_email', get_option( 'return_email' ), $this );
 		$from_name  = apply_filters( 'wpsc_purchase_log_notification_from_name', get_option( 'return_name' ), $this );
 
-		// don't worry, wp_mail() will automatically assign default values if these options
-		// are not set and empty
-		$headers = 'From: "' . $from_name . '" <' . $from_email . '>';
+	        if ( ! $from_name || ! $from_email) {
+	            $headers = '';
+	        } else {
+	            $headers = 'From: "' . $from_name . '" <' . $from_email . '>';
+	        }
 		return apply_filters( 'wpsc_purchase_log_notification_headers', $headers, $this );
 	}
 

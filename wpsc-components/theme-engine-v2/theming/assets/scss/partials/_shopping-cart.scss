@@ -27,16 +27,19 @@ Shopping Cart
 .wpsc-cart-cell:last-of-type, .wpsc-cart-cell-header:last-of-type {
     margin-right: 0;
 }
-
-.top {
-	.express-checkout-button {
-		display: inline-block;
-	    vertical-align: bottom;
-	}
-	.wpsc-begin-checkout {
-	    @extend .express-checkout-button;
-	    margin-left: 20px;
-	}
+.wpsc-form-actions {
+	@include flexbox();
+	@include justify-content(flex-end);
+	@include align-items(center);
+}
+.express-checkout-button,
+.wpsc-begin-checkout {
+	display: inline-block;
+    vertical-align: bottom;
+    box-shadow: none !important; //needed to override .entry-content a
+}
+.paypal-express-separator {
+	margin: 0 0.5em;
 }
 
 /* Single Product Row */
@@ -51,6 +54,9 @@ Shopping Cart
 }
 .wpsc-cart-cell.quantity {
     width: $cart_quantity_width;
+}
+.wpsc-cart-quantity-input {
+	width: 100%;
 }
 .wpsc-cart-cell.item-total {
     width: $cart_item-total_width;

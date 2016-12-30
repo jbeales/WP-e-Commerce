@@ -44,6 +44,11 @@ class WPSC_Digital_Contents_Table extends WPSC_Table {
 
 		$downloadables = $wpdb->get_results( $sql );
 
+		if ( empty( $downloadables ) ) {
+			$this->digital_items = array();
+			return;
+		}
+		
 		$product_ids = wp_list_pluck( $downloadables, 'product_id' );
 		$product_ids = array_unique( array_map( 'absint', $product_ids ) );
 		$this->items = get_posts( array(
@@ -87,15 +92,15 @@ class WPSC_Digital_Contents_Table extends WPSC_Table {
 
 	public function column_product( $item ) {
 ?>
+	<div class="wpsc-digital-product-title">
+		<strong><a href="<?php wpsc_product_permalink( $item->ID ); ?>"><?php wpsc_product_title( '', '', $item->ID ); ?></a></strong>
+	</div>
 	<div class="wpsc-thumbnail wpsc-product-thumbnail">
 		<?php if ( wpsc_has_product_thumbnail( $item->ID ) ): ?>
 			<?php echo wpsc_get_product_thumbnail( $item->ID, 'cart' ); ?>
 		<?php else: ?>
 			<?php wpsc_product_no_thumbnail_image( 'cart' ); ?>
 		<?php endif; ?>
-	</div>
-	<div class="wpsc-digital-product-title">
-		<strong><a href="<?php wpsc_product_permalink( $item->ID ); ?>"><?php wpsc_product_title( '', '', $item->ID ); ?></a></strong>
 	</div>
 <?php
 	}

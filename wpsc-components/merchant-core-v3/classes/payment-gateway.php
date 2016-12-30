@@ -50,13 +50,29 @@ final class WPSC_Payment_Gateways {
 	 * Return a particular payment gateway object
 	 *
 	 * @access public
+	 *
 	 * @param string $gateway Name of the payment gateway you want to get
-	 * @return object
+	 * @param string $meta    Pass-through parameter for meta
+	 *
+	 * @return WPSC_Payment_Gateway|WP_Error Returns an error if gateway cannot be found, 3.0 gateway otherwise.
 	 * @since 3.9
 	 */
-	public static function &get( $gateway, $meta = false ) {
+	public static function &get( $gateway, $meta = array() ) {
+
+		$errors = new WP_Error();
+
+		if ( empty( $gateway ) ) {
+			$errors->add( 'empty_gateway', __( 'You cannot pass an empty string as a gateway object.', 'wp-e-commerce' ) );
+			return $errors;
+		}
 
 		if ( empty( self::$instances[ $gateway ] ) ) {
+
+			// If no meta is found, it is likely that a legacy or unsupported gateway is being used, and we should exit early.
+			if ( ! isset( self::$gateways[ $gateway ] ) ) {
+				$errors->add( 'unregistered_gateway', __( 'The gateway used is out of date. We recommend no longer using this gateway.', 'wp-e-commerce' ) );
+				return $errors;
+			}
 
 			if ( ! $meta ) {
 				$meta = self::$gateways[ $gateway ];
@@ -98,7 +114,7 @@ final class WPSC_Payment_Gateways {
 		WPSC_Payment_Gateways::register_dir( WPSC_MERCHANT_V3_PATH . '/gateways' );
 
 		// Call the Active Gateways init function
-		self::initialize_gateways();
+		add_action( 'wpsc_ready', array( __CLASS__, 'initialize_gateways' ) );
 
 		if ( isset( $_REQUEST['payment_gateway'] ) && isset( $_REQUEST['payment_gateway_callback'] ) ) {
 			add_action( 'init', array( 'WPSC_Payment_Gateways', 'action_process_callbacks' ) );
@@ -307,7 +323,7 @@ final class WPSC_Payment_Gateways {
 	 *               returns false.
 	 */
 	public static function get_meta( $gateway ) {
-		return isset( self::$gateways[$gateway] ) ? self::$gateways[$gateway] : false;
+		return isset( self::$gateways[ $gateway ] ) ? self::$gateways[ $gateway ] : false;
 	}
 
 	/**
@@ -334,8 +350,8 @@ final class WPSC_Payment_Gateways {
 	 */
 	public static function get_active_gateways() {
 		if ( empty( self::$active_gateways ) ) {
-			$selected_gateways = get_option( 'custom_gateway_options', array() );
-			$registered_gateways = self::get_gateways();
+			$selected_gateways     = get_option( 'custom_gateway_options', array() );
+			$registered_gateways   = self::get_gateways();
 			self::$active_gateways = array_intersect( $selected_gateways, $registered_gateways );
 		}
 
@@ -355,7 +371,10 @@ final class WPSC_Payment_Gateways {
 
 		foreach( $active_gateways as $gateway_id ) {
 			$gateway = self::get( $gateway_id );
-			$gateway->init();
+
+			if ( ! is_wp_error( $gateway ) ) {
+				$gateway->init();
+			}
 		}
 	}
 
@@ -438,7 +457,6 @@ abstract class WPSC_Payment_Gateway {
 	 * @access public
 	 * @var WPSC_Payment_Gateway_Setting
 	 */
-
 	public $setting;
 
 	public $purchase_log;
@@ -533,7 +551,7 @@ abstract class WPSC_Payment_Gateway {
 	 *
 	 * @param string $feature string The name of a feature to test support for.
 	 * @return bool True if the gateway supports the feature, false otherwise.
-	 * @since
+	 * @since 4.0
 	 */
 	public function supports( $feature ) {
 		return apply_filters( 'wpsc_payment_gateway_supports', in_array( $feature, $this->supports ) ? true : false, $feature, $this );
@@ -697,15 +715,15 @@ abstract class WPSC_Payment_Gateway {
 		switch ( $this->purchase_log->get( 'processed' ) ) {
 			case 3:
 				// payment worked
-				do_action('wpsc_payment_successful');
+				do_action( 'wpsc_payment_successful' );
 				break;
 			case 1:
 				// payment declined
-				do_action('wpsc_payment_failed');
+				do_action( 'wpsc_payment_failed' );
 				break;
 			case 2:
 				// something happened with the payment
-				do_action('wpsc_payment_incomplete');
+				do_action( 'wpsc_payment_incomplete' );
 				break;
 		}
 
@@ -739,6 +757,24 @@ abstract class WPSC_Payment_Gateway {
 	 * @return void
 	 */
 	public function init() {}
+
+	/**
+	 * Process refund
+	 *
+	 * If the gateway declares 'refunds' support, this will allow it to refund
+	 * a passed in amount.
+	 *
+	 * @param  int    $order_id
+	 * @param  float   $amount
+	 * @param  string  $reason
+	 * @param  boolean $manual If refund is a manual refund.
+	 *
+	 * @since 4.0.0
+	 * @return bool|WP_Error True or false based on success, or a WP_Error object
+	 */
+	public function process_refund( $order_id, $amount = 0.00, $reason = '', $manual = false ) {
+		return false;
+	}
 }
 
 class WPSC_Payment_Gateway_Setting {

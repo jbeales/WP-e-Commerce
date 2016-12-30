@@ -7,6 +7,13 @@ Media Queries
 		.wpsc-column-6,
 		.wpsc-column-5 {
 			width: $columns-4;
+			.wpsc-product-title {
+				font-size: $title-size-col-4;
+			}
+			.wpsc-old-price {
+				font-size: $sml-size-col-4;
+			}
+			@include price($price-size-col-4);
 		}
 	}
 }
@@ -17,12 +24,43 @@ Media Queries
 		.wpsc-column-5,
 		.wpsc-column-4 {
 			width: $columns-3;
+			.wpsc-product-title {
+				font-size: $title-size-col-3;
+			}
+			.wpsc-old-price {
+				font-size: $sml-size-col-3;
+			}
+			@include price($price-size-col-3);
+		}
+	}
+
+	$classes: id date status tracking-id total;
+
+	@each $class in $classes {
+		.wpsc-cart-cell.#{$class} {
+	    	width: 100%;
+		}
+	}
+
+	$titles: id date status tracking-id total;
+	@each $title in $titles {
+		.wpsc-cart-cell.#{$title}:before {
+			font-weight: $bold;
+			content: attr(data-title);
+		}
+	}
+
+	.wpsc-customer-account-index {
+		.wpsc-cart-footer,
+		.wpsc-cart-header {
+			display: none;
 		}
 	}
 }
 
 @media (max-width: 550px) {
 	@import 'mobile-and-sidebar';
+
 	.wpsc-grid {
 		.wpsc-column-6,
 		.wpsc-column-5,
@@ -30,6 +68,13 @@ Media Queries
 		.wpsc-column-3,
 		.wpsc-column-2 {
 			width: $full-width;
+			.wpsc-product-title {
+				font-size: $title-size-col-2;
+			}
+			.wpsc-old-price {
+				font-size: $sml-size-col-2;
+			}
+			@include price($price-size-col-2);
 		}
 	}
 	.wpsc-single,
@@ -40,6 +85,24 @@ Media Queries
 			float: none;
 			width: $full-width;
 		}	
+	}
+	.wpsc-controller .wpsc-shopping-cart .wpsc-form-actions {
+		text-align: left;
+	}
+	.wpsc-form-actions {
+		display: block;
+	}
+	.wpsc-begin-checkout,
+	.express-checkout-button {
+		display: block;
+		text-align: left;
+		margin-left: 0;
+	}	
+	.express-checkout-button {
+		margin-bottom: 20px;
+	}
+	.wpsc-begin-checkout {
+		margin-top: 20px;
 	}
 	.wpsc-cart-footer {
 		.wpsc-cart-actions-row {
@@ -77,5 +140,36 @@ Media Queries
 			    margin-left: 0;
 			}
 		}
+	}
+
+	.wpsc-controller .wpsc-create-account-offer,
+	.wpsc-controller .wpsc-login-form-wrapper  {
+		float: none;
+		
+		width: 100%;
+	}
+	.wpsc-cart-cell.product,
+	.wpsc-cart-cell.contents {
+		width: 100%;
+	}
+
+	.wpsc-cart-cell.contents {
+		margin-top: 1em;
+	}
+
+	.wpsc-customer-account-digital-content .wpsc-cart-footer {
+		display: none;
+	}
+
+	.wpsc-controller .wpsc-tabs > li {
+		display: block;
+	}
+
+	.wpsc-controller .wpsc-tabs > .active > a {
+		border: 0;
+	}
+
+	.wpsc-tab-item {
+		padding: 5px 0;
 	}
 }
