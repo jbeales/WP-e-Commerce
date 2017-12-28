@@ -18,12 +18,12 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	 * @param array $options
 	 * @param bool $child
 	 *
-	 * @since 3.9
+	 * @since 3.9.0
 	 */
 	public function __construct( $options, $child = false ) {
+		require_once( 'php-merchant/gateways/paypal-express-checkout.php' );
 		parent::__construct();
 
-		require_once( 'php-merchant/gateways/paypal-express-checkout.php' );
 		$this->gateway = new PHP_Merchant_Paypal_Express_Checkout( $options );
 
 		if ( ! $child ) {
@@ -33,7 +33,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 				'api_username'     => $this->setting->get( 'api_username' ),
 				'api_password'     => $this->setting->get( 'api_password' ),
 				'api_signature'    => $this->setting->get( 'api_signature' ),
-				'cancel_url'       => wpsc_get_cart_url(),
+				'cancel_url'       => $this->get_cart_url(),
 				'currency'         => $this->get_currency_code(),
 				'test'             => (bool) $this->setting->get( 'sandbox_mode' ),
 				'address_override' => 1,
@@ -56,7 +56,10 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	}
 
 	public function incontext_load_scripts() {
-		if( wpsc_is_checkout() || wpsc_is_cart() ) {
+
+		$is_cart = wpsc_is_theme_engine( '1.0' ) ? wpsc_is_checkout() : ( wpsc_is_checkout() || wpsc_is_cart() );
+
+		if ( $is_cart && wpsc_is_gateway_active( 'paypal-express-checkout' ) ) {
 			wp_register_script( 'ec-incontext', WPSC_URL . '/wpsc-components/merchant-core-v3/gateways/ec-incontext.js', '', null, true );
 			wp_localize_script( 'ec-incontext', 'wpec_ppic', array(
 				'mid' => esc_attr( $this->setting->get( 'api_merchantid' ) ),
@@ -213,11 +216,12 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	 * Run the gateway hooks
 	 *
 	 * @access public
-	 * @since 4.0
+	 * @since 3.9.0
 	 *
 	 * @return void
 	 */
 	public function init() {
+		parent::init();
 		add_filter(
 			'wpsc_payment_method_form_fields',
 			array( 'WPSC_Payment_Gateway_Paypal_Express_Checkout', 'filter_unselect_default' ), 100 , 1
@@ -231,7 +235,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	 * @param array $fields
 	 * @return array
 	 *
-	 * @since 3.9
+	 * @since 3.9.0
 	 */
 	public static function filter_unselect_default( $fields ) {
 		foreach ( $fields as $i => $field ) {
@@ -247,7 +251,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	 * @access public
 	 * @return string
 	 *
-	 * @since 3.9
+	 * @since 3.9.0
 	 */
 	public function get_mark_html() {
 		$html = '<img src="https://www.paypalobjects.com/webstatic/mktg/logo/pp_cc_mark_37x23.jpg" border="0" alt="PayPal Logo">';
@@ -261,7 +265,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	 * @param array $data Arguments to encode with the URL
 	 * @return string
 	 *
-	 * @since 3.9
+	 * @since 3.9.0
 	 */
 	public function get_redirect_url( $data = array() ) {
 
@@ -498,7 +502,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 		$this->pull_paypal_details();
 
 		// If no Shipping is required, confirm the Transaction
-		if ( !wpsc_uses_shipping() ) {
+		if ( ! wpsc_uses_shipping() ) {
 			$this->callback_confirm_transaction();
 		}
 
@@ -515,7 +519,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	 */
 	public function review_order_buyer_details( $output ) {
 		$payer = $this->paypal_data->get( 'payer' );
-		$output .= '<ul>';
+		$output .= '<ul class="wpsc-paypal wpsc-paypal-customer">';
 		$output .= '<li><strong>' . __( 'Email:', 'wp-e-commerce' ) . ' </strong>' . $payer->email . '</li>';
 		$output .= '<li><strong>' . __( 'First Name:', 'wp-e-commerce' ) . ' </strong>' . $payer->first_name . '</li>';
 		$output .= '<li><strong>' . __( 'Last Name:', 'wp-e-commerce' ) . ' </strong>' . $payer->last_name . '</li>';
@@ -531,12 +535,10 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	 */
 	public function review_order_shipping_details( $output ) {
 		$address = $this->paypal_data->get( 'shipping_address' );
-		$output .= '<ul>';
+		$output .= '<ul class="wpsc-paypal wpsc-paypal-customer-address">';
 		$output .= '<li>' . $address[ 'name' ] . '</li>';
 		$output .= '<li>' . $address[ 'street' ] . '</li>';
-		$output .= '<li>' . $address[ 'city' ] . '</li>';
-		$output .= '<li>' . $address[ 'state' ] . '</li>';
-		$output .= '<li>' . $address[ 'zip' ] . '</li>';
+		$output .= '<li>' . $address[ 'city' ] . ', ' . $address[ 'state' ] . ' ' . $address[ 'zip' ] . '</li>';
 		$output .= '<li>' . $address[ 'country_code' ] . '</li>';
 		$output .= '</ul>';
 		return $output;
@@ -547,7 +549,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	 *
 	 * @return bool
 	 *
-	 * @since 3.9
+	 * @since 3.9.0
 	 */
 	public function callback_confirm_transaction() {
 		if ( ! isset( $_REQUEST['sessionid'] ) || ! isset( $_REQUEST['token'] ) || ! isset( $_REQUEST['PayerID'] ) ) {
@@ -568,7 +570,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	/**
 	 * Process the transaction through the PayPal APIs
 	 *
-	 * @since 3.9
+	 * @since 3.9.0
 	 */
 	public function do_transaction() {
 		$args = array_map( 'urldecode', $_GET );
@@ -750,7 +752,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	/**
 	 * Error Page Template
 	 *
-	 * @since 3.9
+	 * @since 3.9.0
 	 */
 	public function filter_paypal_error_page() {
 		$errors = wpsc_get_customer_meta( 'paypal_express_checkout_errors' );
@@ -764,7 +766,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 			<li><?php echo esc_html( $error['details'] ) ?> (<?php echo esc_html( $error['code'] ); ?>)</li>
 			<?php endforeach; ?>
 		</ul>
-			<p><a href="<?php echo esc_url( wpsc_get_cart_url() ); ?>"><?php ( 'Click here to go back to the checkout page.') ?></a></p>
+			<p><a href="<?php echo esc_url( $this->get_cart_url() ); ?>"><?php ( 'Click here to go back to the checkout page.') ?></a></p>
 <?php
 		$output = apply_filters( 'wpsc_paypal_express_checkout_gateway_error_message', ob_get_clean(), $errors );
 		return $output;
@@ -773,13 +775,13 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	/**
 	 * Generic Error Page Template
 	 *
-	 * @since 3.9
+	 * @since 3.9.0
 	 */
 	public function filter_generic_error_page() {
 		ob_start();
 ?>
 <p><?php _e( 'Sorry, but your transaction could not be processed by PayPal for some reason. Please contact the site administrator.' , 'wp-e-commerce' ); ?></p>
-<p><a href="<?php echo esc_attr( wpsc_get_cart_url() ); ?>"><?php _e( 'Click here to go back to the checkout page.', 'wp-e-commerce' ) ?></a></p>
+<p><a href="<?php echo esc_attr( $this->get_cart_url() ); ?>"><?php _e( 'Click here to go back to the checkout page.', 'wp-e-commerce' ) ?></a></p>
 <?php
 		$output = apply_filters( 'wpsc_paypal_express_checkout_generic_error_message', ob_get_clean() );
 		return $output;
@@ -788,7 +790,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	/**
 	 * Settings Form Template
 	 *
-	 * @since 3.9
+	 * @since 3.9.0
 	 */
 	public function setup_form() {
 		$paypal_currency = $this->get_currency_code();
@@ -948,7 +950,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	 *
 	 * @return bool
 	 *
-	 * @since 3.9
+	 * @since 3.9.0
 	 */
 	protected function is_currency_supported() {
 		return in_array( parent::get_currency_code(), $this->gateway->get_supported_currencies() );
@@ -959,7 +961,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	 *
 	 * @return string
 	 *
-	 * @since 3.9
+	 * @since 3.9.0
 	 */
 	public function get_currency_code() {
 		$code = parent::get_currency_code();
@@ -977,7 +979,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	 *
 	 * @return integer
 	 *
-	 * @since 3.9
+	 * @since 3.9.0
 	 */
 	protected function convert( $amt ) {
 		if ( $this->is_currency_supported() ) {
@@ -992,7 +994,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	 *
 	 * @return void
 	 *
-	 * @since 3.9
+	 * @since 3.9.0
 	 */
 	public function process() {
 		$total = $this->convert( $this->purchase_log->get( 'totalprice' ) );
@@ -1043,7 +1045,7 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 	 * @param PHP_Merchant_Paypal_Express_Checkout_Response $response
 	 * @return void
 	 *
-	 * @since 3.9
+	 * @since 3.9.0
 	 */
 	public function log_error( $response ) {
 		if ( $this->setting->get( 'debugging' ) ) {
@@ -1067,13 +1069,13 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 		}
 	}
 
-	public function process_refund( $order_id, $amount = 0.00, $reason = '', $manual = false ) {
+	public function process_refund( $log, $amount = 0.00, $reason = '', $manual = false ) {
 
 		if ( 0.00 == $amount ) {
 			return new WP_Error( 'paypal_refund_error', __( 'Refund Error: You need to specify a refund amount.', 'wp-e-commerce' ) );
 		}
 
-		$log = new WPSC_Purchase_Log( $order_id );
+		$log = wpsc_get_order( $log );
 
 		if ( ! $log->get( 'transactid' ) ) {
 			return new WP_Error( 'error', __( 'Refund Failed: No transaction ID', 'wp-e-commerce' ) );
@@ -1087,9 +1089,15 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 
 		if ( $manual ) {
 			$current_refund = $log->get_total_refunded();
+
+			// Set a log meta entry, and save log before adding refund note.
 			$log->set( 'total_order_refunded' , $amount + $current_refund )->save();
 
-			wpsc_purchlogs_update_notes( absint( $order_id ), sprintf( __( 'Refunded %s via Manual Refund', 'wp-e-commerce' ), wpsc_currency_display( $amount ) ) );
+			$log->add_refund_note(
+				sprintf( __( 'Refunded %s via Manual Refund', 'wp-e-commerce' ), wpsc_currency_display( $amount ) ),
+				$reason
+			);
+
 			return true;
 		}
 
@@ -1122,11 +1130,16 @@ class WPSC_Payment_Gateway_Paypal_Express_Checkout extends WPSC_Payment_Gateway 
 			if ( 'Success' == $params['ACK'] || 'SuccessWithWarning' == $params['ACK'] ) {
 
 				$this->log_error( $response );
-				// Set a log meta entry
+
 				$current_refund = $log->get_total_refunded();
+
+				// Set a log meta entry, and save log before adding refund note.
 				$log->set( 'total_order_refunded' , $amount + $current_refund )->save();
 
-				wpsc_purchlogs_update_notes( absint( $order_id ), sprintf( __( 'Refunded %s - Refund ID: %s', 'wp-e-commerce' ), wpsc_currency_display( $params['GROSSREFUNDAMT'] ), $params['REFUNDTRANSACTIONID'] ) );
+				$log->add_refund_note(
+					sprintf( __( 'Refunded %s - Refund ID: %s', 'wp-e-commerce' ), wpsc_currency_display( $params['GROSSREFUNDAMT'] ), $params['REFUNDTRANSACTIONID'] ),
+					$reason
+				);
 
 				return true;
 			}

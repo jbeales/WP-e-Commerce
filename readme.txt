@@ -3,8 +3,8 @@ Contributors: JustinSainton
 Donate link: https://wpecommerce.org
 Tags: e-commerce, digital downloads, wp-e-commerce, shop, cart, paypal, authorize, stock control, ecommerce, shipping, tax
 Requires at least: 4.5
-Tested up to: 4.6
-Stable tag: 4.0-dev
+Tested up to: 4.7.2
+Stable tag: 3.12.0
 
 WP eCommerce is a free, powerful plugin that empowers you to sell anything online, quickly and easily.
 
@@ -35,6 +35,37 @@ Before updating please make a backup of your existing files and database. Just i
 After upgrading from earlier versions look for link "Update Store". This will update your database structure to work with new version.
 
 == Changelog ==
+
+= 3.12.0 [2017-2-17] =
+
+* Fix: When updating a pending order, ensure that the order object's total price is updated as well.
+* Fix: Update admin.js to not use deprecated size() method.
+* Fix: Currency code was incorrectly cached.
+* Fix: Express Checkout 3.0 JavaScript now properly enqueued.
+* Enhancement: 2.0 Theme Engine now supports floating labels.
+* Enhancement: Payment Gateway API now fully supports Auth/Capture workflows, in addition to refunds and partial refunds introduced in 3.11.5
+* New: Addition of ProPay (TSYS) Gateway.
+
+= 3.11.7 [2017-2-05] =
+
+* Fix: In PHP versions prior to 5.5, we caused a fatal error. Our apologies are sincere, but update your PHP! Literally the same problem resolved in 3.11.6, just in a different context.  We'll get better at supporting EOL PHP, the WordPress way.
+
+= 3.11.6 [2017-2-05] =
+
+* Fix: In PHP versions prior to 5.5, we caused a fatal error. Our apologies are sincere, but update your PHP!
+
+= 3.11.5 [2017-2-04] =
+
+* Fix: Our extension page had some dated code which, in a bizarre turn of events, caused bulk select to break for all list tables. Mystery of mysteries, solved.
+* Fix: Fix PHPMailer issue for emails failing to send when admin email is empty.
+* Enhancement: Addition of In-Context Checkout for PayPal Express (3.0)
+* Enhancement: Addition of Order Notes API
+* Enhancement: Addition of Refund API (including partial refunds)
+* Enhancement: Addition of ability to edit pending orders.
+
+= 3.11.4 [2016-11-11] =
+
+* Security Fix: Under specific conditions (Gold Cart enabled, using eWay as a payment processor, and using the yet-to-be-released 2.0 Theme Engine) - a SQL vulnerability has been patched.
 
 = 3.11.3 [2016-5-23] =
 

@@ -59,6 +59,7 @@ window.WPSC_Purchase_Logs_Admin = window.WPSC_Purchase_Logs_Admin || {};
 				.on( 'change', '.wpsc_item_qty', admin.update_qty )
 				.on( 'click', '.wpsc-add-item-button', function() { admin.product_search.trigger( 'open' ); } )
 				.on( 'click', '.refund-items', admin.toggleRefundsUI )
+				.on( 'click', '.capture-payment', admin.capturePayment )
 				.on( 'click', 'button.do-api-refund, button.do-manual-refund', admin.refundItem );
 			$c.body.on( 'click', '.ui-find-overlay', function() { admin.product_search.trigger( 'close' ); } );
 
@@ -85,42 +86,74 @@ window.WPSC_Purchase_Logs_Admin = window.WPSC_Purchase_Logs_Admin || {};
 			$( '.wpsc-refund-ui' ).toggle();
 	};
 
-	admin.refundItem = function() {
-		var $this      = $( this );
-		var $spinner   = $this.siblings('.ajax-feedback');
-		var api_refund = $this.is( '.do-api-refund' );
+	admin.refundItem = function( evt ) {
+		var $button       = $( this );
+		var $spinner      = $button.parents( 'tr' ).find('.spinner');
+		var api_refund    = $button.is( '.do-api-refund' );
 		var refund_string = api_refund ? wpsc.strings.confirm_refund_order : wpsc.strings.confirm_refund_order_manually;
 
 		if ( ! window.confirm( refund_string ) ) {
 			return;
 		}
 
-		var refund_reason = $( 'input#refund_reason' ).val();
-		var refund_amount = $( 'input#refund_amount' ).val();
-
 		var data = {
 			action        : 'purchase_log_refund_items',
 			order_id      : wpsc.log_id,
-			refund_reason : refund_reason,
-			refund_amount : refund_amount,
+			refund_reason : $( 'input#refund_reason' ).val(),
+			refund_amount : $( 'input#refund_amount' ).val(),
 			api_refund    : api_refund,
 			nonce         : wpsc.purchase_log_refund_items_nonce
 		};
 
 		var ajax_callback = function( response ) {
-			$spinner.toggleClass( 'ajax-feedback-active' );
-
+			$spinner.removeClass( 'is-active' );
 			if ( ! response.is_successful ) {
 				if ( response.error ) {
 					window.alert( response.error.messages.join( BR ) );
 				}
+			} else {
 
-				return;
+				setTimeout( function() {
+					// Re-spinner while we refresh page.
+					$spinner.addClass( 'is-active' );
+				}, 900 );
+
+				window.location.href = window.location.href;
 			}
-			window.location.href = window.location.href;
 		};
 
-		$spinner.toggleClass( 'ajax-feedback-active' );
+		$spinner.addClass( 'is-active' );
+
+		$.wpsc_post( data, ajax_callback );
+	};
+
+	admin.capturePayment = function( evt ) {
+		var $button       = $( this );
+		var $spinner      = $button.siblings( '.spinner' );
+
+		var data = {
+			action         : 'purchase_log_capture_payment',
+			order_id       : wpsc.log_id,
+			nonce          : wpsc.purchase_log_capture_payment_nonce
+		};
+
+		var ajax_callback = function( response ) {
+			$spinner.removeClass( 'is-active' );
+			if ( ! response.is_successful ) {
+				if ( response.error ) {
+					window.alert( response.error.messages.join( BR ) );
+				}
+			} else {
+				setTimeout( function() {
+					// Re-spinner while we refresh page.
+					$spinner.addClass( 'is-active' );
+				}, 900 );
+
+				window.location.href = window.location.href;
+			}
+		};
+
+		$spinner.addClass( 'is-active' );
 
 		$.wpsc_post( data, ajax_callback );
 	};

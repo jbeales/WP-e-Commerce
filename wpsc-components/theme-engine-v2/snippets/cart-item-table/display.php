@@ -10,6 +10,7 @@
 	</div>
 	<div class="wpsc-cart-footer">
 
+		<?php if ( $this->show_coupon_field || $this->show_quantity_field ) : ?>
 		<div class="wpsc-row wpsc-cart-aggregate wpsc-cart-actions-row">
 			<div class="wpsc-cart-cell apply-coupon">
 			<?php if ( wpsc_uses_coupons() && $this->show_coupon_field ) : ?>
@@ -18,11 +19,16 @@
 			<?php endif; ?>
 			</div>
 			<div class="wpsc-cart-cell update-quantity">
+				<div class="wpsc-quantity-field-wrapper">
+					<?php if ( $this->show_quantity_field ) : ?>
+				</div>
 				<input type="submit" class="wpsc-button wpsc-button-small wpsc-cart-update" name="update_quantity" value="<?php esc_html_e( 'Update Quantity', 'wp-e-commerce' ); ?>" />
 				<input type="hidden" name="action" value="update_quantity" />
+			<?php endif; ?>
 			</div>
 		</div>
-
+		<?php endif; ?>
+		
 		<div class="wpsc-cart-aggregate wpsc-cart-subtotal-row">
 			<div class="wpsc-cart-cell-header" scope="row">
 				<?php esc_html_e( 'Subtotal:' ,'wp-e-commerce' ); ?><br />

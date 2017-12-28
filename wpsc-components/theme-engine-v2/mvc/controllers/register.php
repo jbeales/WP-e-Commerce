@@ -12,11 +12,12 @@ class WPSC_Controller_Register extends WPSC_Controller {
 	}
 
 	public function index() {
-		if ( isset( $_POST['action'] ) && $_POST['action'] == 'register' ) {
+		if ( isset( $_POST['action'] ) && 'register' === $_POST['action'] ) {
 			$this->callback_register();
 		}
 
 		$this->view = 'register';
+		_wpsc_enqueue_float_label_scripts();
 	}
 
 	public function filter_fields_dont_match_message() {

@@ -5,6 +5,7 @@ function _wpsc_te2_register_styles() {
 
 	wpsc_te2_register_style( 'wpsc-common', "common{$suffix}.css" );
 	wpsc_te2_register_style( 'wpsc-responsive', "wpsc-responsive{$suffix}.css" );
+	wpsc_te2_register_style( 'wpsc-fluidbox', "wpsc-fluid-box{$suffix}.css" );
 
 	do_action( 'wpsc_register_styles' );
 }
@@ -14,6 +15,7 @@ function _wpsc_te2_enqueue_styles() {
 
 	wp_enqueue_style( 'wpsc-common' );
 	wp_enqueue_style( 'wpsc-responsive' );
+	wp_enqueue_style( 'wpsc-responsive' );
 
 	if ( apply_filters( 'wpsc_add_inline_style', true ) ) {
 		wp_add_inline_style( 'wpsc-common', _wpsc_get_inline_style() );
@@ -21,6 +23,7 @@ function _wpsc_te2_enqueue_styles() {
 
 	do_action( 'wpsc_enqueue_styles' );
 }
+
 add_action( 'wp_enqueue_scripts' , '_wpsc_te2_enqueue_styles', 1 );
 
 /**

@@ -118,7 +118,7 @@ add_filter('set-screen-option', 'wpsc_set_screen_option', 99, 3);
  * @param   string  $taxonomy  Taxonomy.
  * @param   string  $context   Context.
  *
- * @since  4.0.0
+ * @since  3.11.5
  *
  * @return  array              Filtered dropdown args.
  */
@@ -432,6 +432,7 @@ function wpsc_admin_include_purchase_logs_css_and_js() {
 		'purchase_log_save_tracking_id_nonce'    => _wpsc_create_ajax_nonce( 'purchase_log_save_tracking_id' ),
 		'purchase_log_send_tracking_email_nonce' => _wpsc_create_ajax_nonce( 'purchase_log_send_tracking_email' ),
 		'purchase_log_refund_items_nonce'        => _wpsc_create_ajax_nonce( 'purchase_log_refund_items' ),
+		'purchase_log_capture_payment_nonce'     => _wpsc_create_ajax_nonce( 'purchase_log_capture_payment' ),
 		'remove_log_item_nonce'                  => _wpsc_create_ajax_nonce( 'remove_log_item' ),
 		'update_log_item_qty_nonce'              => _wpsc_create_ajax_nonce( 'update_log_item_qty' ),
 		'add_log_item_nonce'                     => _wpsc_create_ajax_nonce( 'add_log_item' ),
@@ -795,6 +796,27 @@ function _wpsc_enqueue_wp_e_commerce_admin( ) {
 add_action( 'admin_menu', 'wpsc_admin_pages' );
 
 /**
+ * Get completed purchase status string to use in database queries
+ *
+ * @return string comma delimited string of existing purchase log status that note completed transactions,
+ *                suitable to use in a SQL 'IN' clause to find completed transactions
+ */
+function _wpsc_get_completed_purchase_status_text() {
+	global $wpdb;
+	$sql = "SELECT DISTINCT processed FROM `" . WPSC_TABLE_PURCHASE_LOGS . "`";
+	$statii = $wpdb->get_col( $sql );
+	foreach( $statii as $index => $status ) {
+		if ( ! WPSC_Purchase_Log::is_order_status_completed( $status ) ) {
+			unset( $statii[$index] );
+		}
+	}
+
+	$statii = implode( ',', $statii );
+
+	return $statii;
+}
+
+/**
  * Displays latest activity in the Dashboard widget
  *
  * @uses $wpdb                          WordPress database object for queries
@@ -816,11 +838,14 @@ function wpsc_admin_latest_activity() {
 	echo "<strong class='dashboardHeading'>" . esc_html__( 'Current Month', 'wp-e-commerce' ) . "</strong><br />";
 	echo "<p class='dashboardWidgetSpecial'>";
 	// calculates total amount of orders for the month
+
+	$statii = _wpsc_get_completed_purchase_status_text();
+
 	$year = date( "Y" );
 	$month = date( "m" );
 	$start_timestamp = mktime( 0, 0, 0, $month, 1, $year );
 	$end_timestamp = mktime( 0, 0, 0, ( $month + 1 ), 0, $year );
-	$sql = "SELECT COUNT(*) FROM `" . WPSC_TABLE_PURCHASE_LOGS . "` WHERE `date` BETWEEN '$start_timestamp' AND '$end_timestamp' AND `processed` IN (2,3,4) ORDER BY `date` DESC";
+	$sql = "SELECT COUNT(*) FROM `" . WPSC_TABLE_PURCHASE_LOGS . "` WHERE `date` BETWEEN '$start_timestamp' AND '$end_timestamp' AND `processed` IN ($statii) ORDER BY `date` DESC";
 	$currentMonthOrders = $wpdb->get_var( $sql );
 
 	//calculates amount of money made for the month
@@ -1112,12 +1137,13 @@ function wpsc_dashboard_4months_widget() {
 	$months[] = mktime( 0, 0, 0, $this_month - 1, 1, $this_year );
 	$months[] = mktime( 0, 0, 0, $this_month, 1, $this_year );
 
+	$statii = _wpsc_get_completed_purchase_status_text();
 	$products = $wpdb->get_results( "SELECT `cart`.`prodid`,
 	 `cart`.`name`
 	 FROM `" . WPSC_TABLE_CART_CONTENTS . "` AS `cart`
 	 INNER JOIN `" . WPSC_TABLE_PURCHASE_LOGS . "` AS `logs`
 	 ON `cart`.`purchaseid` = `logs`.`id`
-	 WHERE `logs`.`processed` >= 2
+	 WHERE `logs`.`processed` IN ($statii)
 	 AND `logs`.`date` >= " . $months[0] . "
 	 GROUP BY `cart`.`prodid`
 	 ORDER BY SUM(`cart`.`price` * `cart`.`quantity`) DESC
@@ -1134,6 +1160,7 @@ function wpsc_dashboard_4months_widget() {
 	$timeranges[3]["end"] = time(); // using mktime here can generate a php runtime warning
 
 	$prod_data = array( );
+	$statii = _wpsc_get_completed_purchase_status_text();
 	foreach ( (array)$products as $product ) { //run through products and get each product income amounts and name
 		$sale_totals = array( );
 		foreach ( $timeranges as $timerange ) { //run through time ranges of product, and get its income over each time range
@@ -1142,7 +1169,7 @@ function wpsc_dashboard_4months_widget() {
 			FROM `" . WPSC_TABLE_CART_CONTENTS . "` AS `cart`
 			INNER JOIN `" . WPSC_TABLE_PURCHASE_LOGS . "` AS `logs`
 				ON `cart`.`purchaseid` = `logs`.`id`
-			WHERE `logs`.`processed` >= 2
+			WHERE `logs`.`processed` IN ($statii)
 				AND `logs`.`date` >= " . $timerange["start"] . "
 				AND `logs`.`date` < " . $timerange["end"] . "
 				AND `cart`.`prodid` = " . $product['prodid'] . "
@@ -1521,7 +1548,7 @@ add_filter( 'plugin_action_links_' . WPSC_PLUGIN_BASENAME, 'wpsc_support_links' 
  *
  * @param  array $args Array of removable query args.
  *
- * @since  4.0.0
+ * @since  3.11.5
  *
  * @return array $args Array of removable query args.
  */
@@ -1538,7 +1565,7 @@ add_filter( 'removable_query_args', 'wpsc_removable_query_args' );
  * @param  array $bulk_messages Array of bulk messages.
  * @param  int   $bulk_counts   The amount of messages affected.
  *
- * @since  4.0.0
+ * @since  3.11.5
  *
  * @return array                Array of bulk messages.
  */
@@ -1556,3 +1583,32 @@ function wpsc_bulk_updated_messages( $bulk_messages, $bulk_counts ) {
 }
 
 add_filter( 'bulk_post_updated_messages', 'wpsc_bulk_updated_messages', 10, 2 );
+
+/**
+ * Add rating links to the admin dashboard
+ *
+ * @since	    3.12
+ * @global		string $typenow
+ * @param       string $footer_text The existing footer text
+ * @return      string Changed $footer_text
+ */
+function wpsc_admin_rate_us( $footer_text ) {
+	global $typenow;
+
+	if ( $typenow == 'wpsc-product' ) {
+		$rate_text = sprintf( __( 'Thank you for using <a href="%1$s" target="_blank">WP eCommerce</a>! Please <a href="%2$s" target="_blank">rate us</a> on <a href="%2$s" target="_blank">WordPress.org</a>', 'wp-e-commerce' ),
+			'https://wpecommerce.org',
+			'https://wordpress.org/support/plugin/wp-e-commerce/reviews/?filter=5#new-post'
+		);
+		return str_replace( '</span>', '', $footer_text ) . ' | ' . $rate_text . '</span>';
+	} else {
+		return $footer_text;
+	}
+}
+add_filter( 'admin_footer_text', 'wpsc_admin_rate_us' );
+
+function wpsc_product_category_edit_form_tag() {
+	echo 'enctype="multipart/form-data" ';
+}
+add_action( 'wpsc_product_category_term_new_form_tag', 'wpsc_product_category_edit_form_tag' );
+add_action( 'wpsc_product_category_term_edit_form_tag', 'wpsc_product_category_edit_form_tag' );

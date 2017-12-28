@@ -3,7 +3,7 @@
   * Plugin Name: WP eCommerce
   * Plugin URI: http://wpecommerce.org/
   * Description: A plugin that provides a WordPress Shopping Cart. See also: <a href="http://wpecommerce.org" target="_blank">WPeCommerce.org</a> | <a href="https://wordpress.org/support/plugin/wp-e-commerce/" target="_blank">Support Forum</a> | <a href="http://docs.wpecommerce.org/" target="_blank">Documentation</a>
-  * Version: 4.0-dev
+  * Version: 3.12.0
   * Author: WP eCommerce
   * Author URI: http://wpecommerce.org/
   * Text Domain: wp-e-commerce
@@ -47,6 +47,7 @@ class WP_eCommerce {
 	public function init() {
 		// Previous to initializing
 		do_action( 'wpsc_pre_init' );
+
 		// Initialize
 		$this->start();
 		$this->constants();
@@ -143,7 +144,7 @@ class WP_eCommerce {
 	/**
 	 * Sets table names as WPDB properties.
 	 *
-	 * @since  4.0.0
+	 * @since  3.11.5
 	 * @return array Array of custom tables
 	 */
 	public function setup_table_names() {

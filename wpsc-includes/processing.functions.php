@@ -42,7 +42,7 @@ function wpsc_currency_display( $price_in, $args = null ) {
 			wp_cache_set( $currency_type, $wpsc_currency_data, 'wpsc_currency_id' );
 		}
 	} elseif ( ! $wpsc_currency_data = wp_cache_get( $query['isocode'], 'wpsc_currency_isocode' ) ) {
-		$wpsc_currency_data = WPSC_Countries::get_currency_data( $currency_type, true );
+		$wpsc_currency_data = WPSC_Countries::get_currency_data( $query['isocode'], true );
 		wp_cache_set( $query['isocode'], $wpsc_currency_data, 'wpsc_currency_isocode' );
 	}
 
@@ -211,13 +211,15 @@ function wpsc_get_currency_code(){
 function admin_display_total_price($start_timestamp = '', $end_timestamp = '') {
   global $wpdb;
 
-   if( ( $start_timestamp != '' ) && ( $end_timestamp != '' ) )
-	$sql = $wpdb->prepare( "SELECT SUM(`totalprice`) FROM `".WPSC_TABLE_PURCHASE_LOGS."` WHERE `processed` IN (2,3,4,5) AND `date` BETWEEN %s AND %s", $start_timestamp, $end_timestamp );
-    else
-	$sql = "SELECT SUM(`totalprice`) FROM `".WPSC_TABLE_PURCHASE_LOGS."` WHERE `processed` IN (2,3,4,5) AND `date` != ''";
+   $statii = _wpsc_get_completed_purchase_status_text();
+   if( ( $start_timestamp != '' ) && ( $end_timestamp != '' ) ) {
+	   $sql = $wpdb->prepare( "SELECT SUM(`totalprice`) FROM `" . WPSC_TABLE_PURCHASE_LOGS . "` WHERE `processed` IN ($statii) AND `date` BETWEEN %s AND %s", $start_timestamp, $end_timestamp );
+   } else {
+	   $sql = "SELECT SUM(`totalprice`) FROM `" . WPSC_TABLE_PURCHASE_LOGS . "` WHERE `processed` IN ($statii) AND `date` != ''";
+   }
 
-    $total = $wpdb->get_var($sql);
-  return $total;
+   $total = $wpdb->get_var($sql);
+   return $total;
 }
 
 function wpsc_get_mimetype($file, $check_reliability = false) {

@@ -36,8 +36,15 @@ class WPSC_Payment_Gateway_Amazon_Payments extends WPSC_Payment_Gateway {
 	private $user_is_authenticated = false;
 
 	public function __construct() {
-
 		parent::__construct();
+
+		// Define user set variables
+		$this->seller_id       = $this->setting->get( 'seller_id' );
+		$this->mws_access_key  = $this->setting->get( 'mws_access_key' );
+		$this->secret_key      = $this->setting->get( 'secret_key' );
+		$this->sandbox         = $this->setting->get( 'sandbox_mode' ) == '1' ? true : false;
+		$this->payment_capture = $this->setting->get( 'payment_capture' ) !== null ? $this->setting->get( 'payment_capture' ) : '';
+		$this->client_id       = $this->setting->get( 'client_id' );
 
 		$this->title = __( 'Amazon Payments', 'wp-e-commerce' );
 
@@ -48,14 +55,6 @@ class WPSC_Payment_Gateway_Amazon_Payments extends WPSC_Payment_Gateway {
 		$this->order_handler    = WPSC_Amazon_Payments_Order_Handler::get_instance( $this );
 
 		add_action( 'init', array( $this->order_handler, 'process_ipn' ) );
-
-		// Define user set variables
-		$this->seller_id       = $this->setting->get( 'seller_id' );
-		$this->mws_access_key  = $this->setting->get( 'mws_access_key' );
-		$this->secret_key      = $this->setting->get( 'secret_key' );
-		$this->sandbox         = $this->setting->get( 'sandbox_mode' ) == '1' ? true : false;
-		$this->payment_capture = $this->setting->get( 'payment_capture' ) !== null ? $this->setting->get( 'payment_capture' ) : '';
-		$this->client_id       = $this->setting->get( 'client_id' );
 
 		$base_country = new WPSC_Country( wpsc_get_base_country() );
 
@@ -105,7 +104,7 @@ class WPSC_Payment_Gateway_Amazon_Payments extends WPSC_Payment_Gateway {
 	 *
 	 * @return bool Whether or not to load gateway.
 	 */
-	public static function load() {
+	public function load() {
 		return version_compare( phpversion(), '5.3', '>=' ) && function_exists( 'curl_init' ) && function_exists( '_wpsc_get_current_controller' );
 	}
 
@@ -114,7 +113,7 @@ class WPSC_Payment_Gateway_Amazon_Payments extends WPSC_Payment_Gateway {
 	 *
 	 * @access public
 	 *
-	 * @since 4.0
+	 * @since 3.11.0
 	 *
 	 * @return void
 	 */
@@ -382,7 +381,7 @@ class WPSC_Payment_Gateway_Amazon_Payments extends WPSC_Payment_Gateway {
 	 *
 	 * If it is declined for any other reason, they're basically out of luck.
 	 *
-	 * @since  4.0
+	 * @since  3.11.0
 	 *
 	 * @param  WPSC_Purchase_Log $order Current purchase log for transaction.
 	 * @return void
@@ -412,7 +411,7 @@ class WPSC_Payment_Gateway_Amazon_Payments extends WPSC_Payment_Gateway {
 	 * @param array $buyer   Buyer information
 	 * @param array $address Shipping information
 	 *
-	 * @since  4.0
+	 * @since  3.11.0
 	 */
 	private function set_customer_address( $buyer, $address ) {
 
@@ -480,7 +479,7 @@ class WPSC_Payment_Gateway_Amazon_Payments extends WPSC_Payment_Gateway {
 	/**
 	 * Maybe hide standard checkout button on the cart, if enabled
 	 *
-	 * @since 4.0
+	 * @since 3.11.0
 	 */
 	public function maybe_hide_standard_checkout_button() {
 		if ( $this->setting->get( 'hide_button_display' ) ) {
@@ -498,7 +497,7 @@ class WPSC_Payment_Gateway_Amazon_Payments extends WPSC_Payment_Gateway {
 	 * Load handlers for cart and orders after cart is loaded.
 	 */
 	public function init() {
-
+		parent::init();
 		// Disable if no seller ID
 		if ( empty( $this->seller_id ) ) {
 			return;
@@ -637,7 +636,7 @@ class WPSC_Payment_Gateway_Amazon_Payments extends WPSC_Payment_Gateway {
 	 * Retrieve the IPN URL for Amazon
 	 *
 	 * @access public
-	 * @since  4.0
+	 * @since  3.11.0
 	 * @return string
 	 */
 	private function get_amazon_ipn_url() {
@@ -785,7 +784,7 @@ class WPSC_Payment_Gateway_Amazon_Payments extends WPSC_Payment_Gateway {
 	 *
 	 * This function primarily effects TEv1
 	 *
-	 * @since  4.0
+	 * @since  3.11.0
 	 */
 	public function remove_gateways() {
 
@@ -797,7 +796,7 @@ class WPSC_Payment_Gateway_Amazon_Payments extends WPSC_Payment_Gateway {
 	 *
 	 * This function effects TEv2.
 	 *
-	 * @since  4.0
+	 * @since  3.11.0
 	 */
 	public function remove_gateways_v2( $fields ) {
 		foreach ( $fields as $i => $field ) {
@@ -1570,7 +1569,7 @@ class WPSC_Amazon_Payments_Order_Handler {
 	 * Process IPN messages from Amazon
 	 *
 	 * @access public
-	 * @since  4.0
+	 * @since  3.11.0
 	 * @return void
 	 */
 	public function process_ipn() {
@@ -1667,7 +1666,7 @@ class WPSC_Amazon_Payments_Order_Handler {
 	 *
 	 * Templates are named by language and type.
 	 *
-	 * @since  4.0
+	 * @since  3.11.0
 	 *
 	 * @param  boolean $hard Whether it was a hard decline (invalid payment) or soft (systems).
 	 * @return boolean $mail Whether or not email was sent.
@@ -1715,7 +1714,7 @@ class WPSC_Amazon_Payments_Order_Handler {
 	/**
 	 * Retrieves the email template path (and subject) for declined email notifications.
 	 *
-	 * @since  4.0
+	 * @since  3.11.0
 	 * @param  boolean $hard Whether or not decline is "hard". Hard declined methods may not be retried.
 	 *
 	 * @return array<string> Array of template part path and subject line.
